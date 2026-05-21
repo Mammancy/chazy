@@ -1,0 +1,34 @@
+﻿services:
+  - type: web
+    name: aboki-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_NAME
+        value: ABOKI Companion AI
+      - key: APP_VERSION
+        value: 0.1.0
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: API_V1_PREFIX
+        value: /api/v1
+      - key: DATABASE_URL
+        value: sqlite:///./aboki.db
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: OPENAI_TIMEOUT_SECONDS
+        value: 30
+      - key: OPENAI_MAX_RETRIES
+        value: 2
+      - key: OPENAI_RETRY_BASE_DELAY_SECONDS
+        value: 0.5
+      - key: CORS_ORIGINS
+        value: '*'
+      - key: OPENAI_API_KEY
+        sync: false
