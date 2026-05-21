@@ -13,7 +13,7 @@ from app.config.settings import get_settings
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["openai-diagnostic"])
 
-TEST_MESSAGE = "Hello from ABOKI"
+TEST_MESSAGE = "Hello from CHAZY"
 
 
 @router.get("/test-openai")
@@ -44,7 +44,7 @@ async def test_openai() -> JSONResponse:
     client = AsyncOpenAI()
     request_payload: dict[str, Any] = {
         "model": model,
-        "instructions": "You are ABOKI. Reply briefly and clearly.",
+        "instructions": "You are CHAZY. Reply briefly and clearly.",
         "input": TEST_MESSAGE,
         "temperature": 0.2,
         "max_output_tokens": 80,
@@ -189,3 +189,4 @@ def _extract_response_text(response: Any) -> str:
             if text:
                 parts.append(str(text))
     return "".join(parts)
+

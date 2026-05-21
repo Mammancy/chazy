@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.ai import OpenAIService, TemporaryConversationalResponseEngine
 from app.ai.english_learning_pipeline import EnglishLearningPipeline, GrammarAnalysis
-from app.ai.personality import ABOKI_SYSTEM_PROMPT
+from app.ai.personality import CHAZY_SYSTEM_PROMPT
 from app.emotions.analyzer import EmotionAnalyzer
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -170,8 +170,8 @@ class ChatService:
         memory_context: dict[str, Any],
         request_id: str | None = None,
     ) -> tuple[dict[str, str], str]:
-        result = await _OPENAI_SERVICE.generate_companion_response(
-            system_prompt=ABOKI_SYSTEM_PROMPT,
+        result = await _OPENAI_SERVICE.generate_learning_response(
+            system_prompt=CHAZY_SYSTEM_PROMPT,
             grammar_analysis=grammar_analysis,
             memory_context=memory_context,
             emotional_state=emotion_tone,
@@ -247,7 +247,7 @@ class ChatService:
 
         user = User(
             external_id=payload.session_id,
-            full_name=f"ABOKI English Learner {payload.session_id[:8]}",
+            full_name=f"CHAZY English Learner {payload.session_id[:8]}",
             is_active=True,
         )
         self.db.add(user)
@@ -262,7 +262,7 @@ class ChatService:
 
         user = User(
             external_id=session_id,
-            full_name=f"ABOKI English Learner {session_id[:8]}",
+            full_name=f"CHAZY English Learner {session_id[:8]}",
             is_active=True,
         )
         self.db.add(user)
@@ -345,5 +345,7 @@ class ChatService:
                 if value:
                     extracted[key] = value
         return extracted
+
+
 
 

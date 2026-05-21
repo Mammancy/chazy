@@ -1,4 +1,4 @@
-﻿# ABOKI Backend Render Deployment
+﻿# CHAZY Backend Render Deployment
 
 This backend is ready for Render Web Service deployment.
 
@@ -22,13 +22,13 @@ Health check path:
 ## Required environment variables
 
 ```env
-APP_NAME=ABOKI Companion AI
+APP_NAME=Chazy
 APP_VERSION=0.1.0
 ENVIRONMENT=production
 DEBUG=false
 LOG_LEVEL=INFO
 API_V1_PREFIX=/api/v1
-DATABASE_URL=sqlite:///./aboki.db
+DATABASE_URL=sqlite:///./chazy.db
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
 OPENAI_TIMEOUT_SECONDS=30
@@ -58,3 +58,5 @@ Example body:
   "message": "i is happy today"
 }
 ```
+
+

@@ -13,7 +13,7 @@ class GrammarAnalysis:
 
 
 class EnglishLearningPipeline:
-    """Lightweight pre-OpenAI grammar pipeline for ABOKI chat messages."""
+    """Lightweight pre-OpenAI grammar pipeline for CHAZY chat messages."""
 
     _WORD_REPLACEMENTS = {
         "im": "I am",
@@ -121,3 +121,4 @@ class EnglishLearningPipeline:
         text = re.sub(r"\s+([,.!?])", r"\1", text)
         text = re.sub(r"([,.!?])([^\s])", r"\1 \2", text)
         return " ".join(text.split())
+

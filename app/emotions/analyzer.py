@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ class EmotionAnalysis:
 
 
 class EmotionAnalyzer:
-    """Lightweight keyword and sentiment detector for early ABOKI memory tagging."""
+    """Lightweight keyword and sentiment detector for early CHAZY memory tagging."""
 
     EMOTION_KEYWORDS: dict[str, set[str]] = {
         "happy": {
@@ -158,3 +158,4 @@ class EmotionAnalyzer:
         uppercase_boost = 0.12 if len(text) >= 4 and text.upper() == text else 0.0
         score_boost = min(max(score, 0.0) * 0.12, 0.3)
         return min(0.35 + score_boost + punctuation_boost + uppercase_boost, 1.0)
+

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Any
 
@@ -16,7 +16,7 @@ DEFAULT_MEMORY_CACHE = SessionMemoryStore()
 
 
 class MemoryManagementService:
-    """Stores and retrieves ABOKI memory signals across core memory domains."""
+    """Stores and retrieves CHAZY memory signals across core memory domains."""
 
     def __init__(self, db: Session, cache: SessionMemoryStore | None = None) -> None:
         self.db = db
@@ -310,3 +310,4 @@ class MemoryManagementService:
         except Exception:
             self.db.rollback()
             raise
+

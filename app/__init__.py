@@ -1,2 +1,3 @@
-"""ABOKI backend application package."""
+﻿"""CHAZY backend application package."""
+
 

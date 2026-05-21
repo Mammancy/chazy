@@ -25,13 +25,13 @@ def _env_int(name: str, default: int) -> int:
 
 
 class Settings(BaseModel):
-    app_name: str = Field(default=os.getenv("APP_NAME", "ABOKI Companion AI"))
+    app_name: str = Field(default=os.getenv("APP_NAME", "Chazy"))
     app_version: str = Field(default=os.getenv("APP_VERSION", "0.1.0"))
     environment: str = Field(default=os.getenv("ENVIRONMENT", "development"))
     debug: bool = Field(default=os.getenv("DEBUG", "false").lower() == "true")
     log_level: str = Field(default=os.getenv("LOG_LEVEL", "INFO"))
     api_v1_prefix: str = Field(default=os.getenv("API_V1_PREFIX", "/api/v1"))
-    database_url: str = Field(default=os.getenv("DATABASE_URL", "sqlite:///./aboki.db"))
+    database_url: str = Field(default=os.getenv("DATABASE_URL", "sqlite:///./chazy.db"))
     openai_api_key: str | None = Field(default=os.getenv("OPENAI_API_KEY"))
     openai_model: str = Field(default=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"))
     openai_timeout_seconds: float = Field(default=_env_float("OPENAI_TIMEOUT_SECONDS", 30.0))
@@ -49,3 +49,5 @@ class Settings(BaseModel):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+

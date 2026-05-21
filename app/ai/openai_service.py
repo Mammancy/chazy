@@ -44,7 +44,7 @@ class OpenAIServiceResult:
 
 
 class OpenAIService:
-    """Production OpenAI service for ABOKI English-learning companion responses."""
+    """Production OpenAI service for CHAZY English-learning friend responses."""
 
     REQUIRED_KEYS = ("correction", "explanation", "reply", "suggested_topic")
 
@@ -72,7 +72,7 @@ class OpenAIService:
     def is_configured(self) -> bool:
         return bool(self._api_key and self._client)
 
-    async def generate_companion_response(
+    async def generate_learning_response(
         self,
         *,
         system_prompt: str,
@@ -370,5 +370,7 @@ class OpenAIServiceEmptyResponseError(RuntimeError):
 
 class OpenAIServiceInvalidJSONError(RuntimeError):
     pass
+
+
 
 
