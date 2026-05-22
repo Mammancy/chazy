@@ -37,6 +37,15 @@ class Settings(BaseModel):
     openai_timeout_seconds: float = Field(default=_env_float("OPENAI_TIMEOUT_SECONDS", 30.0))
     openai_max_retries: int = Field(default=_env_int("OPENAI_MAX_RETRIES", 2))
     openai_retry_base_delay_seconds: float = Field(default=_env_float("OPENAI_RETRY_BASE_DELAY_SECONDS", 0.5))
+    smtp_host: str | None = Field(default=os.getenv("SMTP_HOST"))
+    smtp_port: int = Field(default=_env_int("SMTP_PORT", 587))
+    smtp_username: str | None = Field(default=os.getenv("SMTP_USERNAME"))
+    smtp_password: str | None = Field(default=os.getenv("SMTP_PASSWORD"))
+    smtp_from_email: str | None = Field(default=os.getenv("SMTP_FROM_EMAIL"))
+    smtp_use_tls: bool = Field(default=os.getenv("SMTP_USE_TLS", "true").lower() == "true")
+    smtp_use_ssl: bool = Field(default=os.getenv("SMTP_USE_SSL", "false").lower() == "true")
+    smtp_timeout_seconds: float = Field(default=_env_float("SMTP_TIMEOUT_SECONDS", 20.0))
+    password_reset_base_url: str = Field(default=os.getenv("PASSWORD_RESET_BASE_URL", "https://example.com/reset-password"))
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             origin.strip()
@@ -49,5 +58,6 @@ class Settings(BaseModel):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
 
 

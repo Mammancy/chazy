@@ -55,6 +55,11 @@ class ForgotPasswordRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=16, max_length=255)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
 class BasicResponse(BaseModel):
     success: bool
     message: str
@@ -64,6 +69,7 @@ class AuthResponse(BaseModel):
     success: bool
     message: str
     user: UserRead
+
 
 
 

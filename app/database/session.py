@@ -74,8 +74,11 @@ def _upgrade_sqlite_schema() -> None:
                 "country": "ALTER TABLE users ADD COLUMN country VARCHAR(100)",
                 "state": "ALTER TABLE users ADD COLUMN state VARCHAR(100)",
                 "password_hash": "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)",
+                "password_reset_token_hash": "ALTER TABLE users ADD COLUMN password_reset_token_hash VARCHAR(255)",
+                "password_reset_expires_at": "ALTER TABLE users ADD COLUMN password_reset_expires_at DATETIME",
             }
             for column_name, statement in user_column_sql.items():
                 if column_name not in user_columns:
                     connection.execute(text(statement))
+
 

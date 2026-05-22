@@ -60,3 +60,24 @@ Example body:
 ```
 
 
+
+## SMTP email configuration
+
+Set these Render environment variables to enable forgot-password email delivery:
+
+```text
+SMTP_HOST=smtp.your-provider.com
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM_EMAIL=no-reply@your-domain.com
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+SMTP_TIMEOUT_SECONDS=20
+PASSWORD_RESET_BASE_URL=https://your-frontend-or-app-reset-url
+```
+
+Notes:
+- Use port `587` with `SMTP_USE_TLS=true` for most providers.
+- Use port `465` with `SMTP_USE_SSL=true` and `SMTP_USE_TLS=false` if your provider requires SSL.
+- Gmail requires an App Password, not your normal Gmail password.
