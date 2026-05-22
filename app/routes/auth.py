@@ -38,3 +38,10 @@ def get_profile(user_id: int, db: Session = Depends(get_db)) -> UserRead:
     return UserRead.model_validate(user)
 
 
+
+
+@router.delete("/profile/{user_id}", response_model=BasicResponse)
+def delete_profile(user_id: int, db: Session = Depends(get_db)) -> BasicResponse:
+    AuthService(db).delete_account(user_id)
+    return BasicResponse(success=True, message="Account deleted successfully.")
+

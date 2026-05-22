@@ -68,9 +68,27 @@ class AuthService:
 
     def get_profile(self, user_id: int) -> User:
         user = self.db.get(User, user_id)
-        if user is None:
+        if user is None or not user.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
         return user
+
+    def delete_account(self, user_id: int) -> None:
+        user = self.db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+
+        user.email = f"deleted-user-{user.id}@deleted.local"
+        user.external_id = f"deleted:{user.id}"
+        user.full_name = "Deleted user"
+        user.phone_number = None
+        user.country = None
+        user.state = None
+        user.password_hash = None
+        user.password_reset_token_hash = None
+        user.password_reset_expires_at = None
+        user.is_active = False
+        self.db.add(user)
+        self.db.commit()
 
     def forgot_password(self, payload: ForgotPasswordRequest) -> None:
         email = payload.email.lower().strip()
@@ -145,3 +163,4 @@ class AuthService:
     @staticmethod
     def _hash_reset_token(token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
