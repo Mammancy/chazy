@@ -39,6 +39,7 @@ async def init_db() -> None:
     import app.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _seed_default_data()
     _upgrade_sqlite_schema()
 
 
@@ -80,5 +81,14 @@ def _upgrade_sqlite_schema() -> None:
             for column_name, statement in user_column_sql.items():
                 if column_name not in user_columns:
                     connection.execute(text(statement))
+
+
+def _seed_default_data() -> None:
+    from app.services.pronunciation_service import PronunciationService
+    from app.services.speaking_challenge_service import SpeakingChallengeService
+
+    with SessionLocal() as db:
+        PronunciationService(db).seed_default_exercises()
+        SpeakingChallengeService(db).seed_default_challenges()
 
 

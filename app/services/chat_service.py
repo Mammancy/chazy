@@ -15,6 +15,7 @@ from app.models.message import Message
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse, ConversationHistoryMessage, ConversationHistoryResponse
 from app.services.coaching_service import CoachingMetrics, CoachingService
+from app.services.learning_analytics_service import LearningAnalyticsService
 from app.services.memory_management_service import MemoryManagementService
 
 _TEMP_RESPONSE_ENGINE = TemporaryConversationalResponseEngine()
@@ -30,6 +31,7 @@ class ChatService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.memory_service = MemoryManagementService(db)
+        self.analytics_service = LearningAnalyticsService(db)
 
     async def process_message(self, payload: ChatRequest, request_id: str | None = None) -> ChatResponse:
         user = self._resolve_user(payload)
@@ -40,6 +42,12 @@ class ChatService:
             payload=payload,
             grammar_analysis=grammar_analysis,
             coaching_metrics=coaching_metrics,
+        )
+        self.analytics_service.track_message(
+            session_id=payload.session_id,
+            user_id=user.id,
+            message=payload.message,
+            grammar_analysis=grammar_analysis,
         )
 
         user_message_record = self.memory_service.store_conversation_history(
