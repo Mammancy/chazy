@@ -10,27 +10,22 @@ from sqlalchemy.orm import Session
 from app.ai import OpenAIService, TemporaryConversationalResponseEngine
 from app.ai.english_learning_pipeline import EnglishLearningPipeline, GrammarAnalysis
 from app.ai.personality import CHAZY_SYSTEM_PROMPT
-from app.emotions.analyzer import EmotionAnalyzer
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
-from app.schemas.chat import (
-    ChatRequest,
-    ChatResponse,
-    ConversationHistoryMessage,
-    ConversationHistoryResponse,
-)
+from app.schemas.chat import ChatRequest, ChatResponse, ConversationHistoryMessage, ConversationHistoryResponse
+from app.services.coaching_service import CoachingMetrics, CoachingService
 from app.services.memory_management_service import MemoryManagementService
 
 _TEMP_RESPONSE_ENGINE = TemporaryConversationalResponseEngine()
-_EMOTION_ANALYZER = EmotionAnalyzer()
 _ENGLISH_PIPELINE = EnglishLearningPipeline()
 _OPENAI_SERVICE = OpenAIService()
+_COACHING_SERVICE = CoachingService()
 logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    """Application use-case service for English learning chat interactions."""
+    """Application service for AI English speaking coaching."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -40,6 +35,12 @@ class ChatService:
         user = self._resolve_user(payload)
         conversation = self._resolve_conversation(payload=payload, user=user)
         grammar_analysis = _ENGLISH_PIPELINE.analyze(payload.message)
+        coaching_metrics = _COACHING_SERVICE.build_metrics(text=payload.message, grammar_analysis=grammar_analysis)
+        coaching_context = self._build_coaching_context(
+            payload=payload,
+            grammar_analysis=grammar_analysis,
+            coaching_metrics=coaching_metrics,
+        )
 
         user_message_record = self.memory_service.store_conversation_history(
             conversation_id=conversation.id,
@@ -50,54 +51,25 @@ class ChatService:
                 "session_id": payload.session_id,
                 "request_id": request_id,
                 "conversation_id": conversation.id,
-                "source": "english_learning_chat_api",
+                "source": "english_speaking_coach",
+                "practice_mode": payload.practice_mode,
                 "saved_automatically": True,
                 "grammar_mistakes_detected": grammar_analysis.has_grammar_mistakes,
                 "detected_mistakes": grammar_analysis.detected_mistakes,
                 "corrected_sentence": grammar_analysis.corrected_sentence,
+                "fluency_score": coaching_metrics.fluency_score,
+                "vocabulary_suggestions": coaching_metrics.vocabulary_suggestions,
+                "daily_challenge": coaching_metrics.daily_challenge,
+                "speaking_prompt": coaching_metrics.speaking_prompt,
+                "mistake_summary": coaching_metrics.mistake_summary,
             },
         )
 
-        emotion_analysis = _EMOTION_ANALYZER.analyze(payload.message)
-        emotion_tone = emotion_analysis.emotion
-        self.memory_service.store_emotional_pattern(
-            user_id=user.id,
-            conversation_id=conversation.id,
-            message_id=user_message_record.id,
-            emotion=emotion_tone,
-            intensity=emotion_analysis.intensity,
-            trigger_text=payload.message,
-            metadata={
-                "session_id": payload.session_id,
-                "request_id": request_id,
-                "sentiment": emotion_analysis.sentiment,
-                "matched_keywords": emotion_analysis.matched_keywords,
-                "learning_mode": "english_conversation",
-                "grammar_mistakes_detected": grammar_analysis.has_grammar_mistakes,
-                "detected_mistakes": grammar_analysis.detected_mistakes,
-            },
-        )
-
-        details = self._extract_user_details(payload.message)
-        for key, value in details.items():
-            self.memory_service.store_user_detail(
-                user_id=user.id,
-                detail_key=key,
-                detail_value=value,
-                conversation_id=conversation.id,
-                metadata={"session_id": payload.session_id, "request_id": request_id},
-            )
-
-        memory_context = self.memory_service.build_memory_snapshot(
-            user_id=user.id,
-            conversation_id=conversation.id,
-        )
         learning_response, response_source = await self._generate_assistant_reply(
             session_id=payload.session_id,
             user_message=payload.message,
-            emotion_tone=emotion_tone,
             grammar_analysis=grammar_analysis,
-            memory_context=memory_context,
+            coaching_context=coaching_context,
             request_id=request_id,
         )
 
@@ -110,41 +82,22 @@ class ChatService:
                 "session_id": payload.session_id,
                 "request_id": request_id,
                 "conversation_id": conversation.id,
-                "source": "english_learning_chat_api",
+                "source": "english_speaking_coach",
                 "response_source": response_source,
-                "emotion_tone": emotion_tone,
+                "practice_mode": payload.practice_mode,
                 "learning_response": learning_response,
-                "grammar_mistakes_detected": grammar_analysis.has_grammar_mistakes,
-                "detected_mistakes": grammar_analysis.detected_mistakes,
+                "coaching_context": coaching_context,
                 "saved_automatically": True,
                 "paired_user_message_id": user_message_record.id,
             },
         )
-
-        live_context = _TEMP_RESPONSE_ENGINE.get_memory_context(session_id=payload.session_id)
-        summary = live_context.get("memory_summaries", [])[-1] if live_context.get("memory_summaries") else None
-        if summary:
-            self.memory_service.store_memory_summary(
-                user_id=user.id,
-                conversation_id=conversation.id,
-                summary=summary,
-                metadata={
-                    "source": "english_learning_response_engine",
-                    "session_id": payload.session_id,
-                    "request_id": request_id,
-                },
-            )
-            memory_context = self.memory_service.build_memory_snapshot(
-                user_id=user.id,
-                conversation_id=conversation.id,
-            )
 
         return ChatResponse(
             session_id=payload.session_id,
             user_id=user.id,
             conversation_id=conversation.id,
             status=response_source,
-            emotion_tone=emotion_tone,
+            practice_mode=payload.practice_mode,
             user_message=payload.message,
             grammar_mistakes_detected=grammar_analysis.has_grammar_mistakes,
             detected_mistakes=grammar_analysis.detected_mistakes,
@@ -152,10 +105,17 @@ class ChatService:
             explanation=learning_response["explanation"],
             reply=learning_response["reply"],
             suggested_topic=learning_response["suggested_topic"],
+            vocabulary=learning_response.get("vocabulary", ""),
+            confidence_tip=learning_response.get("confidence_tip", ""),
             assistant_message=learning_response["reply"],
             user_message_id=user_message_record.id,
             assistant_message_id=assistant_message_record.id,
-            memory_context=memory_context,
+            fluency_score=coaching_metrics.fluency_score,
+            vocabulary_suggestions=coaching_metrics.vocabulary_suggestions,
+            daily_challenge=coaching_metrics.daily_challenge,
+            speaking_prompt=coaching_metrics.speaking_prompt,
+            mistake_summary=coaching_metrics.mistake_summary,
+            coaching_context=coaching_context,
             request_id=request_id,
             created_at=datetime.now(timezone.utc),
         )
@@ -165,16 +125,14 @@ class ChatService:
         *,
         session_id: str,
         user_message: str,
-        emotion_tone: str,
         grammar_analysis: GrammarAnalysis,
-        memory_context: dict[str, Any],
+        coaching_context: dict[str, Any],
         request_id: str | None = None,
     ) -> tuple[dict[str, str], str]:
         result = await _OPENAI_SERVICE.generate_learning_response(
             system_prompt=CHAZY_SYSTEM_PROMPT,
             grammar_analysis=grammar_analysis,
-            memory_context=memory_context,
-            emotional_state=emotion_tone,
+            coaching_context=coaching_context,
             request_id=request_id,
             fallback_response_factory=lambda: _TEMP_RESPONSE_ENGINE.generate_learning_response(
                 session_id=session_id,
@@ -194,11 +152,7 @@ class ChatService:
         offset: int = 0,
     ) -> ConversationHistoryResponse:
         user = self._resolve_user_by_session(session_id, user_id=user_id)
-        conversation = self._resolve_history_conversation(
-            user=user,
-            conversation_id=conversation_id,
-        )
-
+        conversation = self._resolve_history_conversation(user=user, conversation_id=conversation_id)
         messages = list(
             self.db.scalars(
                 select(Message)
@@ -208,11 +162,7 @@ class ChatService:
                 .limit(limit)
             ).all()
         )
-        memory_context = self.memory_service.build_memory_snapshot(
-            user_id=user.id,
-            conversation_id=conversation.id,
-        )
-
+        coaching_context = self._history_coaching_context(messages)
         return ConversationHistoryResponse(
             session_id=session_id,
             user_id=user.id,
@@ -230,27 +180,48 @@ class ChatService:
                 )
                 for message in messages
             ],
-            memory_context=memory_context,
+            coaching_context=coaching_context,
             limit=limit,
             offset=offset,
             count=len(messages),
         )
+
+    def _build_coaching_context(
+        self,
+        *,
+        payload: ChatRequest,
+        grammar_analysis: GrammarAnalysis,
+        coaching_metrics: CoachingMetrics,
+    ) -> dict[str, Any]:
+        return {
+            "mode": payload.practice_mode,
+            "original_message": grammar_analysis.original_message,
+            "corrected_sentence": grammar_analysis.corrected_sentence,
+            "mistakes": grammar_analysis.detected_mistakes,
+            "mistake_summary": coaching_metrics.mistake_summary,
+            "fluency_score": coaching_metrics.fluency_score,
+            "vocabulary_suggestions": coaching_metrics.vocabulary_suggestions,
+            "daily_challenge": coaching_metrics.daily_challenge,
+            "speaking_prompt": coaching_metrics.speaking_prompt,
+        }
+
+    def _history_coaching_context(self, messages: list[Message]) -> dict[str, Any]:
+        latest_metadata = next((m.metadata_json for m in reversed(messages) if m.metadata_json), {}) or {}
+        return {
+            "last_fluency_score": latest_metadata.get("fluency_score"),
+            "last_mistake_summary": latest_metadata.get("mistake_summary"),
+            "last_daily_challenge": latest_metadata.get("daily_challenge"),
+        }
 
     def _resolve_user(self, payload: ChatRequest) -> User:
         if payload.user_id is not None:
             user = self.db.get(User, payload.user_id)
             if user is not None:
                 return user
-
         user = self.db.scalar(select(User).where(User.external_id == payload.session_id).limit(1))
         if user is not None:
             return user
-
-        user = User(
-            external_id=payload.session_id,
-            full_name=f"CHAZY English Learner {payload.session_id[:8]}",
-            is_active=True,
-        )
+        user = User(external_id=payload.session_id, full_name=f"Chazy English Learner {payload.session_id[:8]}", is_active=True)
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
@@ -261,32 +232,20 @@ class ChatService:
             user = self.db.get(User, user_id)
             if user is not None:
                 return user
-
         user = self.db.scalar(select(User).where(User.external_id == session_id).limit(1))
         if user is not None:
             return user
-
-        user = User(
-            external_id=session_id,
-            full_name=f"CHAZY English Learner {session_id[:8]}",
-            is_active=True,
-        )
+        user = User(external_id=session_id, full_name=f"Chazy English Learner {session_id[:8]}", is_active=True)
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
         return user
 
-    def _resolve_history_conversation(
-        self,
-        *,
-        user: User,
-        conversation_id: int | None = None,
-    ) -> Conversation:
+    def _resolve_history_conversation(self, *, user: User, conversation_id: int | None = None) -> Conversation:
         if conversation_id is not None:
             conversation = self.db.get(Conversation, conversation_id)
             if conversation is not None and conversation.user_id == user.id:
                 return conversation
-
         conversation = self.db.scalar(
             select(Conversation)
             .where(Conversation.user_id == user.id, Conversation.status == "active")
@@ -295,11 +254,10 @@ class ChatService:
         )
         if conversation is not None:
             return conversation
-
         conversation = Conversation(
             user_id=user.id,
-            title="English Practice Conversation",
-            summary="Auto-created for English learning conversation history retrieval.",
+            title="English Speaking Practice",
+            summary="Auto-created for English speaking coach conversation history.",
             status="active",
         )
         self.db.add(conversation)
@@ -312,7 +270,6 @@ class ChatService:
             conversation = self.db.get(Conversation, payload.conversation_id)
             if conversation is not None and conversation.user_id == user.id:
                 return conversation
-
         conversation = self.db.scalar(
             select(Conversation)
             .where(Conversation.user_id == user.id, Conversation.status == "active")
@@ -321,38 +278,15 @@ class ChatService:
         )
         if conversation is not None:
             return conversation
-
         title_seed = payload.message.strip().replace("\n", " ")
         title = (title_seed[:57] + "...") if len(title_seed) > 60 else title_seed
         conversation = Conversation(
             user_id=user.id,
-            title=title or "English Practice Conversation",
-            summary="Auto-created from first English learning chat message.",
+            title=title or "English Speaking Practice",
+            summary="Auto-created from first English speaking coach message.",
             status="active",
         )
         self.db.add(conversation)
         self.db.commit()
         self.db.refresh(conversation)
         return conversation
-
-    @staticmethod
-    def _extract_user_details(message: str) -> dict[str, str]:
-        lower = message.lower()
-        extracted: dict[str, str] = {}
-        patterns = {
-            "name": "my name is ",
-            "likes": "i like ",
-            "work": "i work as ",
-            "location": "i live in ",
-        }
-        for key, marker in patterns.items():
-            if marker in lower:
-                value = message[lower.index(marker) + len(marker) :].strip(" .,!?")
-                if value:
-                    extracted[key] = value
-        return extracted
-
-
-
-
-

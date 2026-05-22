@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import datetime
 
@@ -30,6 +30,4 @@ class Conversation(Base):
     )
     memories: Mapped[list["Memory"]] = relationship(back_populates="conversation")
     memory_summaries: Mapped[list["MemorySummary"]] = relationship(back_populates="conversation")
-    emotional_memories: Mapped[list["EmotionalMemory"]] = relationship(
-        back_populates="conversation"
-    )
+

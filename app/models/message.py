@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import datetime
 
@@ -22,12 +22,4 @@ class Message(Base):
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
     user: Mapped["User | None"] = relationship(back_populates="messages")
-    emotional_tag_links: Mapped[list["MessageEmotionalTag"]] = relationship(
-        back_populates="message",
-        cascade="all, delete-orphan",
-    )
-    emotional_tags: Mapped[list["EmotionalTag"]] = relationship(
-        secondary="message_emotional_tags",
-        viewonly=True,
-    )
-    emotional_memories: Mapped[list["EmotionalMemory"]] = relationship(back_populates="message")
+

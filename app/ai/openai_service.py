@@ -44,9 +44,9 @@ class OpenAIServiceResult:
 
 
 class OpenAIService:
-    """Production OpenAI service for CHAZY English-learning friend responses."""
+    """Production OpenAI service for CHAZY English speaking coach responses."""
 
-    REQUIRED_KEYS = ("correction", "explanation", "reply", "suggested_topic")
+    REQUIRED_KEYS = ("correction", "explanation", "reply", "suggested_topic", "vocabulary", "confidence_tip")
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -77,8 +77,7 @@ class OpenAIService:
         *,
         system_prompt: str,
         grammar_analysis: GrammarAnalysis,
-        memory_context: dict[str, Any],
-        emotional_state: str,
+        coaching_context: dict[str, Any],
         request_id: str | None = None,
         fallback_response_factory: FallbackResponseFactory | None = None,
     ) -> OpenAIServiceResult:
@@ -94,8 +93,7 @@ class OpenAIService:
 
         input_text = self._build_user_prompt(
             grammar_analysis=grammar_analysis,
-            memory_context=memory_context,
-            emotional_state=emotional_state,
+            coaching_context=coaching_context,
         )
         request_payload = {
             "model": self._model,
@@ -113,10 +111,11 @@ class OpenAIService:
             request_id=request_id,
             model=self._model,
             max_attempts=max_attempts,
-            emotional_state=emotional_state,
+            coaching_focus=coaching_context.get("mistake_summary"),
+            fluency_score=coaching_context.get("fluency_score"),
             grammar_mistakes_detected=grammar_analysis.has_grammar_mistakes,
             detected_mistakes=grammar_analysis.detected_mistakes,
-            memory_keys=sorted(memory_context.keys()),
+            coaching_keys=sorted(coaching_context.keys()),
             original_message_chars=len(grammar_analysis.original_message),
             corrected_sentence_chars=len(grammar_analysis.corrected_sentence),
             input_chars=len(input_text),
@@ -268,12 +267,10 @@ class OpenAIService:
     def _build_user_prompt(
         *,
         grammar_analysis: GrammarAnalysis,
-        memory_context: dict[str, Any],
-        emotional_state: str,
+        coaching_context: dict[str, Any],
     ) -> str:
         return "\n".join(
             [
-                f"Detected emotional state: {emotional_state}",
                 f"Grammar mistakes detected: {grammar_analysis.has_grammar_mistakes}",
                 "Detected mistake categories:",
                 json.dumps(grammar_analysis.detected_mistakes, ensure_ascii=False),
@@ -281,9 +278,9 @@ class OpenAIService:
                 grammar_analysis.original_message,
                 "Backend corrected sentence:",
                 grammar_analysis.corrected_sentence,
-                "Relevant memory context:",
-                json.dumps(memory_context, ensure_ascii=False, default=str),
-                "Return strict JSON with correction, explanation, reply, and suggested_topic.",
+                "Coaching context:",
+                json.dumps(coaching_context, ensure_ascii=False, default=str),
+                "Return strict JSON with correction, explanation, reply, suggested_topic, vocabulary, and confidence_tip.",
             ]
         )
 
@@ -310,8 +307,10 @@ class OpenAIService:
         return {
             "correction": str(value.get("correction") or grammar_analysis.corrected_sentence).strip(),
             "explanation": str(value.get("explanation") or self._default_explanation(grammar_analysis)).strip(),
-            "reply": str(reply or "I understand. Let us keep practicing this naturally.").strip(),
-            "suggested_topic": str(suggested_topic or "Can you write one more sentence about this?").strip(),
+            "reply": str(reply or "Good. Now say it again with a little more detail.").strip(),
+            "suggested_topic": str(suggested_topic or "Answer this in one complete sentence.").strip(),
+            "vocabulary": str(value.get("vocabulary") or "Try one stronger word in your next answer.").strip(),
+            "confidence_tip": str(value.get("confidence_tip") or "Speak slowly first, then repeat with more confidence.").strip(),
         }
 
     @staticmethod
@@ -370,6 +369,7 @@ class OpenAIServiceEmptyResponseError(RuntimeError):
 
 class OpenAIServiceInvalidJSONError(RuntimeError):
     pass
+
 
 
 
