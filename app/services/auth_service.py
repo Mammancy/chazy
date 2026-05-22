@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.schemas.user import SignInRequest, SignUpRequest
+from app.schemas.user import ForgotPasswordRequest, SignInRequest, SignUpRequest
 
 
 class AuthService:
@@ -63,6 +63,14 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
         return user
 
+    def forgot_password(self, payload: ForgotPasswordRequest) -> None:
+        email = payload.email.lower().strip()
+        user = self.db.scalar(select(User).where(User.email == email).limit(1))
+        if user is not None:
+            # Email delivery is not configured yet. This hook keeps the API stable
+            # and avoids exposing whether an email exists in the database.
+            pass
+
     @staticmethod
     def _hash_password(password: str) -> str:
         salt = os.urandom(16)
@@ -83,3 +91,4 @@ class AuthService:
 
         actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
         return hmac.compare_digest(actual, expected)
+

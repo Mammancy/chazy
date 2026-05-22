@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.user import AuthResponse, SignInRequest, SignUpRequest, UserRead
+from app.schemas.user import AuthResponse, BasicResponse, ForgotPasswordRequest, SignInRequest, SignUpRequest, UserRead
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -20,7 +20,14 @@ def sign_in(payload: SignInRequest, db: Session = Depends(get_db)) -> AuthRespon
     return AuthResponse(success=True, message="Signed in successfully.", user=UserRead.model_validate(user))
 
 
+@router.post("/forgot-password", response_model=BasicResponse)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)) -> BasicResponse:
+    AuthService(db).forgot_password(payload)
+    return BasicResponse(success=True, message="If this email exists, password reset instructions will be sent when email delivery is configured.")
+
+
 @router.get("/profile/{user_id}", response_model=UserRead)
 def get_profile(user_id: int, db: Session = Depends(get_db)) -> UserRead:
     user = AuthService(db).get_profile(user_id)
     return UserRead.model_validate(user)
+
