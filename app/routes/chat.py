@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -47,6 +47,7 @@ async def chat(
 async def get_chat_history(
     session_id: str = Query(..., min_length=1),
     conversation_id: int | None = Query(default=None, ge=1),
+    user_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -55,6 +56,7 @@ async def get_chat_history(
     return service.get_conversation_history(
         session_id=session_id,
         conversation_id=conversation_id,
+        user_id=user_id,
         limit=limit,
         offset=offset,
     )
@@ -72,6 +74,8 @@ async def get_chat_history_by_conversation(
     return service.get_conversation_history(
         session_id=session_id,
         conversation_id=conversation_id,
+        user_id=user_id,
         limit=limit,
         offset=offset,
     )
+

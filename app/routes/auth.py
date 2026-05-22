@@ -1,0 +1,26 @@
+﻿from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.database.session import get_db
+from app.schemas.user import AuthResponse, SignInRequest, SignUpRequest, UserRead
+from app.services.auth_service import AuthService
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/signup", response_model=AuthResponse)
+def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)) -> AuthResponse:
+    user = AuthService(db).sign_up(payload)
+    return AuthResponse(success=True, message="Account created successfully.", user=UserRead.model_validate(user))
+
+
+@router.post("/signin", response_model=AuthResponse)
+def sign_in(payload: SignInRequest, db: Session = Depends(get_db)) -> AuthResponse:
+    user = AuthService(db).sign_in(payload)
+    return AuthResponse(success=True, message="Signed in successfully.", user=UserRead.model_validate(user))
+
+
+@router.get("/profile/{user_id}", response_model=UserRead)
+def get_profile(user_id: int, db: Session = Depends(get_db)) -> UserRead:
+    user = AuthService(db).get_profile(user_id)
+    return UserRead.model_validate(user)

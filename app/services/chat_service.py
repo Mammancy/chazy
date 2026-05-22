@@ -189,10 +189,11 @@ class ChatService:
         *,
         session_id: str,
         conversation_id: int | None = None,
+        user_id: int | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> ConversationHistoryResponse:
-        user = self._resolve_user_by_session(session_id)
+        user = self._resolve_user_by_session(session_id, user_id=user_id)
         conversation = self._resolve_history_conversation(
             user=user,
             conversation_id=conversation_id,
@@ -255,7 +256,12 @@ class ChatService:
         self.db.refresh(user)
         return user
 
-    def _resolve_user_by_session(self, session_id: str) -> User:
+    def _resolve_user_by_session(self, session_id: str, user_id: int | None = None) -> User:
+        if user_id is not None:
+            user = self.db.get(User, user_id)
+            if user is not None:
+                return user
+
         user = self.db.scalar(select(User).where(User.external_id == session_id).limit(1))
         if user is not None:
             return user
@@ -345,6 +351,7 @@ class ChatService:
                 if value:
                     extracted[key] = value
         return extracted
+
 
 
 

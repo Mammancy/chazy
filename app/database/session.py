@@ -1,4 +1,4 @@
-from collections.abc import Generator
+﻿from collections.abc import Generator
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -59,10 +59,23 @@ def _upgrade_sqlite_schema() -> None:
         return
 
     inspector = inspect(engine)
-    if "messages" not in inspector.get_table_names():
-        return
+    table_names = set(inspector.get_table_names())
 
-    message_columns = {column["name"] for column in inspector.get_columns("messages")}
     with engine.begin() as connection:
-        if "metadata_json" not in message_columns:
-            connection.execute(text("ALTER TABLE messages ADD COLUMN metadata_json JSON"))
+        if "messages" in table_names:
+            message_columns = {column["name"] for column in inspector.get_columns("messages")}
+            if "metadata_json" not in message_columns:
+                connection.execute(text("ALTER TABLE messages ADD COLUMN metadata_json JSON"))
+
+        if "users" in table_names:
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            user_column_sql = {
+                "phone_number": "ALTER TABLE users ADD COLUMN phone_number VARCHAR(32)",
+                "country": "ALTER TABLE users ADD COLUMN country VARCHAR(100)",
+                "state": "ALTER TABLE users ADD COLUMN state VARCHAR(100)",
+                "password_hash": "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)",
+            }
+            for column_name, statement in user_column_sql.items():
+                if column_name not in user_columns:
+                    connection.execute(text(statement))
+
