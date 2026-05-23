@@ -31,3 +31,15 @@ async def admin_dashboard(request: Request) -> HTMLResponse:
             "analytics_endpoint": "/api/v1/admin/analytics/dashboard",
         },
     )
+
+
+@router.get("/admin/users", response_class=HTMLResponse, include_in_schema=False)
+async def admin_user_analytics(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "admin/users.html",
+        {
+            "app_name": "Chazy",
+            "analytics_endpoint": "/api/v1/admin/analytics/dashboard",
+        },
+    )
