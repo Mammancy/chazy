@@ -1,6 +1,9 @@
-﻿from datetime import datetime
+from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+ResponseLengthPreference = Literal["SHORT", "MEDIUM", "DETAILED"]
 
 
 class UserBase(BaseModel):
@@ -11,6 +14,7 @@ class UserBase(BaseModel):
     country: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=100)
     timezone: str = Field(default="Africa/Lagos", max_length=64)
+    response_length_preference: ResponseLengthPreference = "SHORT"
     is_active: bool = True
 
 
@@ -26,7 +30,12 @@ class UserUpdate(BaseModel):
     country: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=100)
     timezone: str | None = Field(default=None, max_length=64)
+    response_length_preference: ResponseLengthPreference | None = None
     is_active: bool | None = None
+
+
+class ResponseLengthPreferenceUpdate(BaseModel):
+    response_length_preference: ResponseLengthPreference
 
 
 class UserRead(UserBase):
@@ -69,7 +78,3 @@ class AuthResponse(BaseModel):
     success: bool
     message: str
     user: UserRead
-
-
-
-

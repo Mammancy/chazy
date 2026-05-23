@@ -2,7 +2,16 @@
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.user import AuthResponse, BasicResponse, ForgotPasswordRequest, ResetPasswordRequest, SignInRequest, SignUpRequest, UserRead
+from app.schemas.user import (
+    AuthResponse,
+    BasicResponse,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    ResponseLengthPreferenceUpdate,
+    SignInRequest,
+    SignUpRequest,
+    UserRead,
+)
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -35,6 +44,16 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
 @router.get("/profile/{user_id}", response_model=UserRead)
 def get_profile(user_id: int, db: Session = Depends(get_db)) -> UserRead:
     user = AuthService(db).get_profile(user_id)
+    return UserRead.model_validate(user)
+
+
+@router.patch("/profile/{user_id}/response-length", response_model=UserRead)
+def update_response_length_preference(
+    user_id: int,
+    payload: ResponseLengthPreferenceUpdate,
+    db: Session = Depends(get_db),
+) -> UserRead:
+    user = AuthService(db).update_response_length_preference(user_id, payload.response_length_preference)
     return UserRead.model_validate(user)
 
 

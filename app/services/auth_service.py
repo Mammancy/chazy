@@ -72,6 +72,17 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
         return user
 
+    def update_response_length_preference(self, user_id: int, preference: str) -> User:
+        user = self.get_profile(user_id)
+        normalized = preference.upper()
+        if normalized not in {"SHORT", "MEDIUM", "DETAILED"}:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid response length preference.")
+        user.response_length_preference = normalized
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
     def delete_account(self, user_id: int) -> None:
         user = self.db.get(User, user_id)
         if user is None:

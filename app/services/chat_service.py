@@ -38,6 +38,7 @@ class ChatService:
 
     async def process_message(self, payload: ChatRequest, request_id: str | None = None) -> ChatResponse:
         user = self._resolve_user(payload)
+        response_length_preference = self._resolve_response_length_preference(user, payload.response_length_preference)
         conversation = self._resolve_conversation(payload=payload, user=user)
         hausa_result = _HAUSA_SERVICE.process(payload.message)
         coaching_text = hausa_result.english_text if hausa_result.is_hausa else payload.message
@@ -47,6 +48,7 @@ class ChatService:
             payload=payload,
             grammar_analysis=grammar_analysis,
             coaching_metrics=coaching_metrics,
+            response_length_preference=response_length_preference,
             hausa_result=hausa_result,
         )
         self.analytics_service.track_message(
@@ -67,6 +69,7 @@ class ChatService:
                 "conversation_id": conversation.id,
                 "source": "english_speaking_coach",
                 "practice_mode": payload.practice_mode,
+                "response_length_preference": response_length_preference,
                 "saved_automatically": True,
                 "input_language": "hausa" if hausa_result.is_hausa else "english",
                 "translated_english": hausa_result.english_text if hausa_result.is_hausa else None,
@@ -116,6 +119,7 @@ class ChatService:
                 "source": "english_speaking_coach",
                 "response_source": response_source,
                 "practice_mode": payload.practice_mode,
+                "response_length_preference": response_length_preference,
                 "input_language": "hausa" if hausa_result.is_hausa else "english",
                 "translated_english": hausa_result.english_text if hausa_result.is_hausa else None,
                 "translation_explanation": hausa_result.explanation if hausa_result.is_hausa else None,
@@ -133,6 +137,7 @@ class ChatService:
             conversation_id=conversation.id,
             status=response_source,
             practice_mode=payload.practice_mode,
+            response_length_preference=response_length_preference,
             user_message=payload.message,
             grammar_mistakes_detected=grammar_analysis.has_grammar_mistakes,
             detected_mistakes=grammar_analysis.detected_mistakes,
@@ -227,10 +232,13 @@ class ChatService:
         payload: ChatRequest,
         grammar_analysis: GrammarAnalysis,
         coaching_metrics: CoachingMetrics,
+        response_length_preference: str,
         hausa_result=None,
     ) -> dict[str, Any]:
         context = {
             "mode": payload.practice_mode,
+            "response_length_preference": response_length_preference,
+            "response_length_instruction": self._response_length_instruction(response_length_preference),
             "original_message": grammar_analysis.original_message,
             "corrected_sentence": grammar_analysis.corrected_sentence,
             "mistakes": grammar_analysis.detected_mistakes,
@@ -252,6 +260,24 @@ class ChatService:
                 }
             )
         return context
+
+    def _resolve_response_length_preference(self, user: User, requested: str | None) -> str:
+        if requested is not None:
+            preference = requested.upper()
+            user.response_length_preference = preference
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+            return preference
+        return (user.response_length_preference or "SHORT").upper()
+
+    @staticmethod
+    def _response_length_instruction(preference: str) -> str:
+        if preference == "DETAILED":
+            return "DETAILED: answer with helpful detail only when useful, but stay clear and organized."
+        if preference == "MEDIUM":
+            return "MEDIUM: answer in about 3 to 5 concise sentences."
+        return "SHORT: default mode; keep the full response under 60 words."
 
     def _with_hausa_guidance(self, learning_response: dict[str, str], hausa_result) -> dict[str, str]:
         enhanced = dict(learning_response)
@@ -303,6 +329,7 @@ class ChatService:
         if user is not None:
             return user
         user = User(external_id=payload.session_id, full_name=f"Chazy English Learner {payload.session_id[:8]}", is_active=True)
+        user.response_length_preference = payload.response_length_preference or "SHORT"
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)

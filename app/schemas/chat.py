@@ -1,5 +1,5 @@
 ﻿from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +10,10 @@ class ChatRequest(BaseModel):
     user_id: int | None = Field(default=None, description="Optional known user id")
     conversation_id: int | None = Field(default=None, description="Optional known conversation id")
     practice_mode: str = Field(default="chat", description="chat, voice, challenge, vocabulary, hausa, or scenario")
+    response_length_preference: Literal["SHORT", "MEDIUM", "DETAILED"] | None = Field(
+        default=None,
+        description="Optional response length mode; stored user preference is used when available.",
+    )
 
 
 class EnglishLearningFeedback(BaseModel):
@@ -35,6 +39,7 @@ class ChatResponse(BaseModel):
     conversation_id: int
     status: str
     practice_mode: str
+    response_length_preference: str
     user_message: str
     grammar_mistakes_detected: bool
     detected_mistakes: list[str]

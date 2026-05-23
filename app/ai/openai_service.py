@@ -81,6 +81,7 @@ class OpenAIService:
         request_id: str | None = None,
         fallback_response_factory: FallbackResponseFactory | None = None,
     ) -> OpenAIServiceResult:
+        response_length_preference = str(coaching_context.get("response_length_preference") or "SHORT").upper()
         if not self.is_configured:
             return self._fallback_result(
                 fallback_response_factory=fallback_response_factory,
@@ -89,6 +90,7 @@ class OpenAIService:
                 attempts=0,
                 error_type="configuration_error",
                 error_message="OPENAI_API_KEY is missing or empty.",
+                response_length_preference=response_length_preference,
             )
 
         input_text = self._build_user_prompt(
@@ -100,7 +102,7 @@ class OpenAIService:
             "instructions": system_prompt,
             "input": input_text,
             "temperature": 0.4,
-            "max_output_tokens": 260,
+            "max_output_tokens": self._max_output_tokens(response_length_preference),
         }
         max_attempts = self._max_retries + 1
         last_error: Exception | None = None
@@ -137,7 +139,11 @@ class OpenAIService:
                 response = await self._client.responses.create(**request_payload)
                 duration_ms = self._elapsed_ms(started_at)
                 raw_text = self._extract_response_text(response).strip()
-                learning_response = self._parse_learning_response(raw_text, grammar_analysis=grammar_analysis)
+                learning_response = self._parse_learning_response(
+                    raw_text,
+                    grammar_analysis=grammar_analysis,
+                    response_length_preference=response_length_preference,
+                )
                 usage = self._usage_to_dict(getattr(response, "usage", None))
 
                 self._log(
@@ -199,6 +205,7 @@ class OpenAIService:
             attempts=max_attempts,
             error_type=last_error.__class__.__name__ if last_error else "unknown_error",
             error_message=str(last_error) if last_error else "OpenAI request failed.",
+            response_length_preference=response_length_preference,
         )
 
     async def close(self) -> None:
@@ -214,6 +221,7 @@ class OpenAIService:
         attempts: int,
         error_type: str,
         error_message: str,
+        response_length_preference: str,
     ) -> OpenAIServiceResult:
         learning_response = (
             fallback_response_factory()
@@ -225,7 +233,11 @@ class OpenAIService:
                 "suggested_topic": "Can you write one more sentence about this?",
             }
         )
-        learning_response = self._normalize_learning_response(learning_response, grammar_analysis=grammar_analysis)
+        learning_response = self._normalize_learning_response(
+            learning_response,
+            grammar_analysis=grammar_analysis,
+            response_length_preference=response_length_preference,
+        )
         self._log(
             logging.INFO,
             "openai_fallback_response",
@@ -280,13 +292,22 @@ class OpenAIService:
                 grammar_analysis.corrected_sentence,
                 "Coaching context:",
                 json.dumps(coaching_context, ensure_ascii=False, default=str),
+                f"Response length preference: {coaching_context.get('response_length_preference', 'SHORT')}",
+                f"Response length instruction: {coaching_context.get('response_length_instruction', 'SHORT: keep the full response under 60 words.')}",
                 "Return strict JSON with correction, explanation, reply, suggested_topic, vocabulary, and confidence_tip.",
-                "Keep explanation to one sentence, reply to one short sentence, and suggested_topic to one follow-up question.",
+                "For SHORT mode, keep all JSON values together under 60 words.",
+                "Keep explanation to one sentence, reply concise, and suggested_topic to one follow-up question.",
                 "Avoid bullets, lectures, essays, long paragraphs, and repeated explanations.",
             ]
         )
 
-    def _parse_learning_response(self, raw_text: str, *, grammar_analysis: GrammarAnalysis) -> LearningResponse:
+    def _parse_learning_response(
+        self,
+        raw_text: str,
+        *,
+        grammar_analysis: GrammarAnalysis,
+        response_length_preference: str,
+    ) -> LearningResponse:
         if not raw_text:
             raise OpenAIServiceEmptyResponseError("OpenAI returned an empty response.")
         try:
@@ -301,12 +322,22 @@ class OpenAIService:
                 raise OpenAIServiceInvalidJSONError(f"OpenAI returned invalid JSON: {exc}") from exc
         if not isinstance(parsed, dict):
             raise OpenAIServiceInvalidJSONError("OpenAI JSON response was not an object.")
-        return self._normalize_learning_response(parsed, grammar_analysis=grammar_analysis)
+        return self._normalize_learning_response(
+            parsed,
+            grammar_analysis=grammar_analysis,
+            response_length_preference=response_length_preference,
+        )
 
-    def _normalize_learning_response(self, value: dict[str, Any], *, grammar_analysis: GrammarAnalysis) -> LearningResponse:
+    def _normalize_learning_response(
+        self,
+        value: dict[str, Any],
+        *,
+        grammar_analysis: GrammarAnalysis,
+        response_length_preference: str,
+    ) -> LearningResponse:
         reply = value.get("reply", value.get("final_reply", ""))
         suggested_topic = value.get("suggested_topic", value.get("suggested_follow_up_question", ""))
-        return {
+        normalized = {
             "correction": self._short_text(value.get("correction") or grammar_analysis.corrected_sentence, 180),
             "explanation": self._first_sentence(value.get("explanation") or self._default_explanation(grammar_analysis), 160),
             "reply": self._first_sentence(reply or "Good, that sounds clear.", 140),
@@ -314,6 +345,9 @@ class OpenAIService:
             "vocabulary": self._first_sentence(value.get("vocabulary") or "Try one stronger word in your next answer.", 140),
             "confidence_tip": self._first_sentence(value.get("confidence_tip") or "Speak slowly first, then repeat with more confidence.", 140),
         }
+        if response_length_preference.upper() == "SHORT":
+            return self._enforce_total_word_limit(normalized, 60)
+        return normalized
 
     @staticmethod
     def _default_explanation(grammar_analysis: GrammarAnalysis) -> str:
@@ -340,6 +374,31 @@ class OpenAIService:
         if not text:
             return "Can you say one more sentence about that?"
         return text if text.endswith("?") else f"{text}?"
+
+    @staticmethod
+    def _max_output_tokens(preference: str) -> int:
+        if preference == "DETAILED":
+            return 650
+        if preference == "MEDIUM":
+            return 380
+        return 220
+
+    @staticmethod
+    def _enforce_total_word_limit(value: LearningResponse, max_words: int) -> LearningResponse:
+        words_used = 0
+        limited: LearningResponse = {}
+        for key in ("correction", "explanation", "reply", "suggested_topic", "vocabulary", "confidence_tip"):
+            words = str(value.get(key, "")).split()
+            remaining = max_words - words_used
+            if remaining <= 0:
+                limited[key] = ""
+                continue
+            if len(words) > remaining:
+                limited[key] = " ".join(words[:remaining]).rstrip(",;:") + "."
+            else:
+                limited[key] = value.get(key, "")
+            words_used += len(str(limited[key]).split())
+        return limited
 
     @staticmethod
     def _extract_response_text(response: Any) -> str:
