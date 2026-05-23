@@ -13,7 +13,11 @@ from app.models.pronunciation import (
 )
 from app.models.speaking_challenge import SpeakingChallenge, SpeakingChallengeCompletion
 from app.models.user import User
-from app.models.vocabulary_notebook import VocabularyNotebookEntry
+from app.models.vocabulary_notebook import (
+    VocabularyNotebookEntry,
+    VocabularyReviewSession,
+    VocabularyReviewSessionItem,
+)
 
 __all__ = [
     "Base",
@@ -29,4 +33,6 @@ __all__ = [
     "SpeakingChallenge",
     "SpeakingChallengeCompletion",
     "VocabularyNotebookEntry",
+    "VocabularyReviewSession",
+    "VocabularyReviewSessionItem",
 ]

@@ -10,6 +10,9 @@ from app.schemas.vocabulary_notebook import (
     VocabularyNotebookResponse,
     VocabularyNotebookStatsResponse,
     VocabularyReviewRequest,
+    VocabularyReviewSessionCreate,
+    VocabularyReviewSessionResponse,
+    VocabularyReviewSessionSubmit,
 )
 from app.services.vocabulary_notebook_service import VocabularyNotebookService
 
@@ -84,3 +87,34 @@ async def get_vocabulary_stats(
     db: Session = Depends(get_db),
 ) -> VocabularyNotebookStatsResponse:
     return VocabularyNotebookService(db).stats(session_id=session_id, user_id=user_id)
+
+
+@router.post("/review-sessions", response_model=VocabularyReviewSessionResponse)
+async def create_vocabulary_review_session(
+    payload: VocabularyReviewSessionCreate,
+    db: Session = Depends(get_db),
+) -> VocabularyReviewSessionResponse:
+    return VocabularyNotebookService(db).create_review_session(payload)
+
+
+@router.get("/review-sessions/{review_session_id}", response_model=VocabularyReviewSessionResponse)
+async def get_vocabulary_review_session(
+    review_session_id: int,
+    db: Session = Depends(get_db),
+) -> VocabularyReviewSessionResponse:
+    try:
+        return VocabularyNotebookService(db).get_review_session(review_session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/review-sessions/{review_session_id}/submit", response_model=VocabularyReviewSessionResponse)
+async def submit_vocabulary_review_session(
+    review_session_id: int,
+    payload: VocabularyReviewSessionSubmit,
+    db: Session = Depends(get_db),
+) -> VocabularyReviewSessionResponse:
+    try:
+        return VocabularyNotebookService(db).submit_review_session(review_session_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

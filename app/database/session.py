@@ -82,6 +82,18 @@ def _upgrade_sqlite_schema() -> None:
                 if column_name not in user_columns:
                     connection.execute(text(statement))
 
+        if "vocabulary_notebook_entries" in table_names:
+            vocabulary_columns = {column["name"] for column in inspector.get_columns("vocabulary_notebook_entries")}
+            vocabulary_column_sql = {
+                "retention_score": "ALTER TABLE vocabulary_notebook_entries ADD COLUMN retention_score FLOAT DEFAULT 0.0",
+                "ease_factor": "ALTER TABLE vocabulary_notebook_entries ADD COLUMN ease_factor FLOAT DEFAULT 2.5",
+                "review_interval_days": "ALTER TABLE vocabulary_notebook_entries ADD COLUMN review_interval_days INTEGER DEFAULT 1",
+                "consecutive_correct": "ALTER TABLE vocabulary_notebook_entries ADD COLUMN consecutive_correct INTEGER DEFAULT 0",
+            }
+            for column_name, statement in vocabulary_column_sql.items():
+                if column_name not in vocabulary_columns:
+                    connection.execute(text(statement))
+
 
 def _seed_default_data() -> None:
     from app.services.pronunciation_service import PronunciationService
