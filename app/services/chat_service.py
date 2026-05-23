@@ -15,6 +15,7 @@ from app.models.message import Message
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse, ConversationHistoryMessage, ConversationHistoryResponse
 from app.services.coaching_service import CoachingMetrics, CoachingService
+from app.services.hausa_learning_service import HausaLearningService
 from app.services.learning_analytics_service import LearningAnalyticsService
 from app.services.memory_management_service import MemoryManagementService
 
@@ -22,6 +23,7 @@ _TEMP_RESPONSE_ENGINE = TemporaryConversationalResponseEngine()
 _ENGLISH_PIPELINE = EnglishLearningPipeline()
 _OPENAI_SERVICE = OpenAIService()
 _COACHING_SERVICE = CoachingService()
+_HAUSA_SERVICE = HausaLearningService()
 logger = logging.getLogger(__name__)
 
 
@@ -36,17 +38,20 @@ class ChatService:
     async def process_message(self, payload: ChatRequest, request_id: str | None = None) -> ChatResponse:
         user = self._resolve_user(payload)
         conversation = self._resolve_conversation(payload=payload, user=user)
-        grammar_analysis = _ENGLISH_PIPELINE.analyze(payload.message)
-        coaching_metrics = _COACHING_SERVICE.build_metrics(text=payload.message, grammar_analysis=grammar_analysis)
+        hausa_result = _HAUSA_SERVICE.process(payload.message)
+        coaching_text = hausa_result.english_text if hausa_result.is_hausa else payload.message
+        grammar_analysis = _ENGLISH_PIPELINE.analyze(coaching_text)
+        coaching_metrics = _COACHING_SERVICE.build_metrics(text=coaching_text, grammar_analysis=grammar_analysis)
         coaching_context = self._build_coaching_context(
             payload=payload,
             grammar_analysis=grammar_analysis,
             coaching_metrics=coaching_metrics,
+            hausa_result=hausa_result,
         )
         self.analytics_service.track_message(
             session_id=payload.session_id,
             user_id=user.id,
-            message=payload.message,
+            message=coaching_text,
             grammar_analysis=grammar_analysis,
         )
 
@@ -62,6 +67,10 @@ class ChatService:
                 "source": "english_speaking_coach",
                 "practice_mode": payload.practice_mode,
                 "saved_automatically": True,
+                "input_language": "hausa" if hausa_result.is_hausa else "english",
+                "translated_english": hausa_result.english_text if hausa_result.is_hausa else None,
+                "translation_explanation": hausa_result.explanation if hausa_result.is_hausa else None,
+                "detected_hausa_terms": hausa_result.detected_terms,
                 "grammar_mistakes_detected": grammar_analysis.has_grammar_mistakes,
                 "detected_mistakes": grammar_analysis.detected_mistakes,
                 "corrected_sentence": grammar_analysis.corrected_sentence,
@@ -75,11 +84,13 @@ class ChatService:
 
         learning_response, response_source = await self._generate_assistant_reply(
             session_id=payload.session_id,
-            user_message=payload.message,
+            user_message=coaching_text,
             grammar_analysis=grammar_analysis,
             coaching_context=coaching_context,
             request_id=request_id,
         )
+        if hausa_result.is_hausa:
+            learning_response = self._with_hausa_guidance(learning_response, hausa_result)
 
         assistant_message_record = self.memory_service.store_conversation_history(
             conversation_id=conversation.id,
@@ -93,6 +104,9 @@ class ChatService:
                 "source": "english_speaking_coach",
                 "response_source": response_source,
                 "practice_mode": payload.practice_mode,
+                "input_language": "hausa" if hausa_result.is_hausa else "english",
+                "translated_english": hausa_result.english_text if hausa_result.is_hausa else None,
+                "translation_explanation": hausa_result.explanation if hausa_result.is_hausa else None,
                 "learning_response": learning_response,
                 "coaching_context": coaching_context,
                 "saved_automatically": True,
@@ -200,8 +214,9 @@ class ChatService:
         payload: ChatRequest,
         grammar_analysis: GrammarAnalysis,
         coaching_metrics: CoachingMetrics,
+        hausa_result=None,
     ) -> dict[str, Any]:
-        return {
+        context = {
             "mode": payload.practice_mode,
             "original_message": grammar_analysis.original_message,
             "corrected_sentence": grammar_analysis.corrected_sentence,
@@ -212,6 +227,39 @@ class ChatService:
             "daily_challenge": coaching_metrics.daily_challenge,
             "speaking_prompt": coaching_metrics.speaking_prompt,
         }
+        if hausa_result is not None and hausa_result.is_hausa:
+            context.update(
+                {
+                    "input_language": "hausa",
+                    "hausa_original": hausa_result.original_text,
+                    "translated_english": hausa_result.english_text,
+                    "translation_explanation": hausa_result.explanation,
+                    "detected_hausa_terms": hausa_result.detected_terms,
+                    "learning_instruction": "Continue in English after briefly explaining the Hausa-English translation.",
+                }
+            )
+        return context
+
+    def _with_hausa_guidance(self, learning_response: dict[str, str], hausa_result) -> dict[str, str]:
+        enhanced = dict(learning_response)
+        translation_note = (
+            f"Hausa to English: {hausa_result.explanation}\n\n"
+            f"Natural English: {hausa_result.english_text}"
+        )
+        enhanced["correction"] = hausa_result.english_text
+        enhanced["explanation"] = f"{translation_note}\n\nGrammar note: {learning_response.get('explanation', '')}".strip()
+        enhanced["reply"] = (
+            f"{translation_note}\n\n"
+            f"{learning_response.get('reply', '')} Please answer in English with one more sentence."
+        ).strip()
+        enhanced["suggested_topic"] = (
+            f"Speaking practice: say this in English 3 times: \"{hausa_result.english_text}\" "
+            "Then add one new detail in English."
+        )
+        enhanced["confidence_tip"] = (
+            "Start from your Hausa idea, say the English translation slowly, then repeat it with stronger voice."
+        )
+        return enhanced
 
     def _history_coaching_context(self, messages: list[Message]) -> dict[str, Any]:
         latest_metadata = next((m.metadata_json for m in reversed(messages) if m.metadata_json), {}) or {}
