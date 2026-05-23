@@ -12,6 +12,11 @@ class AdminTrendPointResponse(BaseModel):
     value: int
 
 
+class AdminCategoryCountResponse(BaseModel):
+    category: str
+    count: int
+
+
 class AdminAnalyticsSectionResponse(BaseModel):
     title: str
     metrics: list[AdminMetricResponse]
@@ -42,6 +47,7 @@ class AdminAnalyticsDashboardResponse(BaseModel):
     conversation_volume: AdminAnalyticsSectionResponse
     challenge_participation: AdminAnalyticsSectionResponse
     learning_progress: AdminAnalyticsSectionResponse
+    learning_issue_categories: list[AdminCategoryCountResponse]
     trends: dict[str, list[AdminTrendPointResponse]]
     api_consumption: AdminApiConsumptionResponse
     system_health: AdminSystemHealthResponse

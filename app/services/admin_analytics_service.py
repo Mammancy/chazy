@@ -19,6 +19,7 @@ from app.schemas.admin_analytics import (
     AdminAnalyticsDashboardResponse,
     AdminAnalyticsSectionResponse,
     AdminApiConsumptionResponse,
+    AdminCategoryCountResponse,
     AdminMetricResponse,
     AdminSystemHealthResponse,
     AdminTrendPointResponse,
@@ -106,12 +107,14 @@ class AdminAnalyticsService:
                     ("Pronunciation Sessions", sum(1 for item in pronunciation_sessions if item.status == "completed"), "Completed pronunciation practice sessions."),
                 ],
             ),
+            learning_issue_categories=self._learning_issue_categories(learning_issues),
             trends={
                 "new_users": self._daily_trend([user.created_at for user in users], since, window_days),
                 "daily_active_users": self._daily_active_trend(recent_messages, since, window_days),
                 "messages": self._daily_trend([message.created_at for message in messages], since, window_days),
                 "challenge_completions": self._daily_trend([item.completed_at for item in challenge_completions], since, window_days),
                 "vocabulary_words": self._daily_trend([item.created_at for item in vocabulary_entries], since, window_days),
+                "fluency_score": self._daily_fluency_trend(messages, since, window_days),
             },
             api_consumption=self._api_consumption(messages),
             system_health=self._system_health(),
@@ -191,6 +194,36 @@ class AdminAnalyticsService:
             day = (now - timedelta(days=offset)).date().isoformat()
             points.append(AdminTrendPointResponse(date=day, value=len(active_by_day.get(day, set()))))
         return points
+
+    def _daily_fluency_trend(self, messages: list[Message], since: datetime, window_days: int) -> list[AdminTrendPointResponse]:
+        scores_by_day: dict[str, list[int]] = {}
+        for message in messages:
+            if message.role != "user" or not self._in_window(message.created_at, since):
+                continue
+            metadata = message.metadata_json or {}
+            score = metadata.get("fluency_score")
+            if not isinstance(score, int | float):
+                continue
+            day = self._aware(message.created_at).date().isoformat()
+            scores_by_day.setdefault(day, []).append(round(score))
+
+        points = []
+        now = datetime.now(timezone.utc)
+        for offset in range(window_days - 1, -1, -1):
+            day = (now - timedelta(days=offset)).date().isoformat()
+            scores = scores_by_day.get(day, [])
+            average_score = round(sum(scores) / len(scores)) if scores else 0
+            points.append(AdminTrendPointResponse(date=day, value=average_score))
+        return points
+
+    def _learning_issue_categories(self, issues: list[LearningIssue]) -> list[AdminCategoryCountResponse]:
+        counts = Counter()
+        for issue in issues:
+            counts[issue.category or "uncategorized"] += issue.count or 1
+        return [
+            AdminCategoryCountResponse(category=category, count=count)
+            for category, count in counts.most_common()
+        ]
 
     def _distinct_challenge_learners(self, completions: list[SpeakingChallengeCompletion]) -> int:
         user_ids = {item.user_id for item in completions if item.user_id is not None}
