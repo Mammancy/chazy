@@ -108,6 +108,7 @@ class AdminAnalyticsService:
             ),
             trends={
                 "new_users": self._daily_trend([user.created_at for user in users], since, window_days),
+                "daily_active_users": self._daily_active_trend(recent_messages, since, window_days),
                 "messages": self._daily_trend([message.created_at for message in messages], since, window_days),
                 "challenge_completions": self._daily_trend([item.completed_at for item in challenge_completions], since, window_days),
                 "vocabulary_words": self._daily_trend([item.created_at for item in vocabulary_entries], since, window_days),
@@ -169,6 +170,26 @@ class AdminAnalyticsService:
         for offset in range(window_days - 1, -1, -1):
             day = (now - timedelta(days=offset)).date().isoformat()
             points.append(AdminTrendPointResponse(date=day, value=counts.get(day, 0)))
+        return points
+
+    def _daily_active_trend(self, messages: list[Message], since: datetime, window_days: int) -> list[AdminTrendPointResponse]:
+        active_by_day: dict[str, set[str]] = {}
+        for message in messages:
+            if message.role != "user" or not self._in_window(message.created_at, since):
+                continue
+            day = self._aware(message.created_at).date().isoformat()
+            identity = f"user:{message.user_id}" if message.user_id is not None else None
+            if identity is None:
+                metadata = message.metadata_json or {}
+                session_id = metadata.get("session_id")
+                identity = f"session:{session_id}" if session_id else f"message:{message.id}"
+            active_by_day.setdefault(day, set()).add(identity)
+
+        points = []
+        now = datetime.now(timezone.utc)
+        for offset in range(window_days - 1, -1, -1):
+            day = (now - timedelta(days=offset)).date().isoformat()
+            points.append(AdminTrendPointResponse(date=day, value=len(active_by_day.get(day, set()))))
         return points
 
     def _distinct_challenge_learners(self, completions: list[SpeakingChallengeCompletion]) -> int:

@@ -1,11 +1,14 @@
-﻿from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config.settings import get_settings
 from app.ai.startup_validation import validate_openai_startup_configuration
 from app.database.session import close_db, init_db
+from app.routes.admin_dashboard import router as admin_dashboard_router
 from app.routes.openai_diagnostic import router as openai_diagnostic_router
 from app.routes.router import api_router
 from app.utils.logging import configure_logging
@@ -40,11 +43,15 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(Path(__file__).resolve().parent / "static")),
+        name="static",
+    )
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+    app.include_router(admin_dashboard_router)
     app.include_router(openai_diagnostic_router)
     return app
 
 
 app = create_application()
-
-

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ app_name }} Admin Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/admin/dashboard.css" rel="stylesheet">
+</head>
+<body>
+<div class="admin-shell">
+    <aside class="sidebar" id="sidebar">
+        <div class="brand">
+            <div class="brand-mark">C</div>
+            <div>
+                <div class="brand-name">{{ app_name }}</div>
+                <div class="brand-subtitle">Admin Analytics</div>
+            </div>
+        </div>
+        <nav class="nav flex-column sidebar-nav">
+            <a class="nav-link active" href="#overview">Overview</a>
+            <a class="nav-link" href="#growth">Growth</a>
+            <a class="nav-link" href="#engagement">Engagement</a>
+            <a class="nav-link" href="#learning">Learning</a>
+            <a class="nav-link" href="#system">System</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button class="btn btn-outline-secondary d-lg-none" type="button" id="sidebarToggle" aria-label="Toggle navigation">Menu</button>
+            <div>
+                <p class="eyebrow mb-1">Production Dashboard</p>
+                <h1 class="h3 mb-0">Admin Analytics</h1>
+            </div>
+            <div class="topbar-actions">
+                <select class="form-select" id="windowSelect" aria-label="Analytics window">
+                    <option value="7">7 days</option>
+                    <option value="30" selected>30 days</option>
+                    <option value="90">90 days</option>
+                    <option value="365">365 days</option>
+                </select>
+                <button class="btn btn-outline-secondary" type="button" id="refreshButton">Refresh</button>
+                <button class="btn btn-dark" type="button" id="themeToggle">Dark</button>
+            </div>
+        </header>
+
+        <section class="status-row" id="overview">
+            <div class="status-card">
+                <span class="status-label">Generated</span>
+                <strong id="generatedAt">Loading</strong>
+            </div>
+            <div class="status-card">
+                <span class="status-label">System</span>
+                <strong id="systemStatus">Loading</strong>
+            </div>
+            <div class="status-card">
+                <span class="status-label">API Requests</span>
+                <strong id="apiRequests">0</strong>
+            </div>
+            <div class="status-card">
+                <span class="status-label">Estimated Cost</span>
+                <strong id="apiCost">$0.00</strong>
+            </div>
+        </section>
+
+        <div class="alert alert-danger d-none" id="errorBox" role="alert"></div>
+
+        <section class="metric-grid" id="metricGrid" aria-live="polite"></section>
+
+        <section class="dashboard-grid" id="growth">
+            <div class="panel panel-wide">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow mb-1">Growth</p>
+                        <h2 class="h5 mb-0">User Growth and Daily Active Learners</h2>
+                    </div>
+                </div>
+                <canvas id="growthChart" height="120"></canvas>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow mb-1">Usage</p>
+                        <h2 class="h5 mb-0">API Consumption</h2>
+                    </div>
+                </div>
+                <canvas id="apiChart" height="170"></canvas>
+                <p class="small text-secondary mb-0 mt-3" id="apiDetail"></p>
+            </div>
+        </section>
+
+        <section class="dashboard-grid" id="engagement">
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow mb-1">Engagement</p>
+                        <h2 class="h5 mb-0">Conversation Volume</h2>
+                    </div>
+                </div>
+                <canvas id="conversationChart" height="170"></canvas>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow mb-1">Challenges</p>
+                        <h2 class="h5 mb-0">Challenge Completion</h2>
+                    </div>
+                </div>
+                <canvas id="challengeChart" height="170"></canvas>
+            </div>
+        </section>
+
+        <section class="dashboard-grid" id="learning">
+            <div class="panel panel-wide">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow mb-1">Learning</p>
+                        <h2 class="h5 mb-0">Vocabulary Growth</h2>
+                    </div>
+                </div>
+                <canvas id="vocabularyChart" height="120"></canvas>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow mb-1">Learning Progress</p>
+                        <h2 class="h5 mb-0">Progress Metrics</h2>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <tbody id="learningTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" id="system">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow mb-1">System</p>
+                    <h2 class="h5 mb-0">Health Statistics</h2>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                        <th>Detail</th>
+                    </tr>
+                    </thead>
+                    <tbody id="systemTable"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+    window.CHazyAdminConfig = {
+        analyticsEndpoint: "{{ analytics_endpoint }}"
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="/static/admin/dashboard.js"></script>
+</body>
+</html>
