@@ -100,7 +100,7 @@ class OpenAIService:
             "instructions": system_prompt,
             "input": input_text,
             "temperature": 0.4,
-            "max_output_tokens": 650,
+            "max_output_tokens": 260,
         }
         max_attempts = self._max_retries + 1
         last_error: Exception | None = None
@@ -281,6 +281,8 @@ class OpenAIService:
                 "Coaching context:",
                 json.dumps(coaching_context, ensure_ascii=False, default=str),
                 "Return strict JSON with correction, explanation, reply, suggested_topic, vocabulary, and confidence_tip.",
+                "Keep explanation to one sentence, reply to one short sentence, and suggested_topic to one follow-up question.",
+                "Avoid bullets, lectures, essays, long paragraphs, and repeated explanations.",
             ]
         )
 
@@ -305,19 +307,39 @@ class OpenAIService:
         reply = value.get("reply", value.get("final_reply", ""))
         suggested_topic = value.get("suggested_topic", value.get("suggested_follow_up_question", ""))
         return {
-            "correction": str(value.get("correction") or grammar_analysis.corrected_sentence).strip(),
-            "explanation": str(value.get("explanation") or self._default_explanation(grammar_analysis)).strip(),
-            "reply": str(reply or "Good. Now say it again with a little more detail.").strip(),
-            "suggested_topic": str(suggested_topic or "Answer this in one complete sentence.").strip(),
-            "vocabulary": str(value.get("vocabulary") or "Try one stronger word in your next answer.").strip(),
-            "confidence_tip": str(value.get("confidence_tip") or "Speak slowly first, then repeat with more confidence.").strip(),
+            "correction": self._short_text(value.get("correction") or grammar_analysis.corrected_sentence, 180),
+            "explanation": self._first_sentence(value.get("explanation") or self._default_explanation(grammar_analysis), 160),
+            "reply": self._first_sentence(reply or "Good, that sounds clear.", 140),
+            "suggested_topic": self._as_question(suggested_topic or "Can you say one more sentence about that?"),
+            "vocabulary": self._first_sentence(value.get("vocabulary") or "Try one stronger word in your next answer.", 140),
+            "confidence_tip": self._first_sentence(value.get("confidence_tip") or "Speak slowly first, then repeat with more confidence.", 140),
         }
 
     @staticmethod
     def _default_explanation(grammar_analysis: GrammarAnalysis) -> str:
         if not grammar_analysis.has_grammar_mistakes:
-            return "Your sentence is already understandable. I polished it for natural flow."
-        return "I corrected the main grammar, word choice, capitalization, or punctuation issue."
+            return "Your sentence is clear; I polished it to sound more natural."
+        return "I corrected the main grammar or word choice issue."
+
+    @staticmethod
+    def _short_text(value: Any, max_chars: int) -> str:
+        text = " ".join(str(value or "").replace("\n", " ").split())
+        if len(text) <= max_chars:
+            return text
+        return text[: max_chars - 1].rstrip() + "."
+
+    @classmethod
+    def _first_sentence(cls, value: Any, max_chars: int) -> str:
+        text = cls._short_text(value, max_chars)
+        match = re.search(r"^(.+?[.!?])(\s|$)", text)
+        return match.group(1).strip() if match else text
+
+    @classmethod
+    def _as_question(cls, value: Any) -> str:
+        text = cls._first_sentence(value, 140).rstrip(".!")
+        if not text:
+            return "Can you say one more sentence about that?"
+        return text if text.endswith("?") else f"{text}?"
 
     @staticmethod
     def _extract_response_text(response: Any) -> str:

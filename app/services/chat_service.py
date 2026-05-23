@@ -255,38 +255,36 @@ class ChatService:
 
     def _with_hausa_guidance(self, learning_response: dict[str, str], hausa_result) -> dict[str, str]:
         enhanced = dict(learning_response)
-        translation_note = (
-            f"Hausa to English: {hausa_result.explanation}\n\n"
-            f"Natural English: {hausa_result.english_text}"
-        )
         enhanced["correction"] = hausa_result.english_text
-        enhanced["explanation"] = f"{translation_note}\n\nGrammar note: {learning_response.get('explanation', '')}".strip()
-        enhanced["reply"] = (
-            f"{translation_note}\n\n"
-            f"{learning_response.get('reply', '')} Please answer in English with one more sentence."
-        ).strip()
-        enhanced["suggested_topic"] = (
-            f"Speaking practice: say this in English 3 times: \"{hausa_result.english_text}\" "
-            "Then add one new detail in English."
-        )
-        enhanced["confidence_tip"] = (
-            "Start from your Hausa idea, say the English translation slowly, then repeat it with stronger voice."
-        )
+        enhanced["explanation"] = f"Natural English: {hausa_result.english_text}"
+        enhanced["reply"] = learning_response.get("reply", "Good, let's continue in English.")
+        enhanced["suggested_topic"] = "Can you answer that again in English?"
+        enhanced["confidence_tip"] = "Say the English version slowly once, then say it again naturally."
         return enhanced
 
     def _with_scenario_guidance(self, learning_response: dict[str, str], scenario_turn) -> dict[str, str]:
         enhanced = dict(learning_response)
-        enhanced["reply"] = (
-            f"{scenario_turn.assistant_reply}\n\n"
-            f"Role-play feedback: {scenario_turn.feedback}"
-        ).strip()
-        enhanced["suggested_topic"] = scenario_turn.next_prompt
+        enhanced["reply"] = self._first_sentence(scenario_turn.assistant_reply)
+        enhanced["suggested_topic"] = self._as_question(scenario_turn.next_prompt)
         enhanced["confidence_tip"] = scenario_turn.coaching_tip
-        enhanced["explanation"] = (
-            f"{learning_response.get('explanation', '')}\n\n"
-            f"Scenario coaching: {scenario_turn.feedback}"
-        ).strip()
+        enhanced["explanation"] = self._first_sentence(scenario_turn.feedback)
         return enhanced
+
+    @staticmethod
+    def _first_sentence(text: str | None) -> str:
+        clean = " ".join(str(text or "").split())
+        for marker in (".", "!", "?"):
+            index = clean.find(marker)
+            if index >= 0:
+                return clean[: index + 1]
+        return clean[:140]
+
+    @classmethod
+    def _as_question(cls, text: str | None) -> str:
+        clean = cls._first_sentence(text).rstrip(".!")
+        if not clean:
+            return "What would you say next?"
+        return clean if clean.endswith("?") else f"{clean}?"
 
     def _history_coaching_context(self, messages: list[Message]) -> dict[str, Any]:
         latest_metadata = next((m.metadata_json for m in reversed(messages) if m.metadata_json), {}) or {}

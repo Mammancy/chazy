@@ -32,7 +32,7 @@ class TemporaryConversationalResponseEngine:
         grammar_analysis = grammar_analysis or self._english_pipeline.analyze(user_message)
         fluency_score = self._score_fluency(user_message, grammar_analysis)
         vocabulary_suggestions = self._suggest_vocabulary(user_message)
-        speaking_prompt = f"Voice practice: say this aloud 3 times: \\\"{grammar_analysis.corrected_sentence}\\\""
+        follow_up_question = "Can you say one more sentence about that?"
         self._remember_user_detail(context, user_message)
         self._append_message(context, role="user", content=user_message)
         reply = self._build_reply(grammar_analysis=grammar_analysis, fluency_score=fluency_score)
@@ -41,7 +41,7 @@ class TemporaryConversationalResponseEngine:
             "correction": grammar_analysis.corrected_sentence,
             "explanation": self._build_explanation(grammar_analysis),
             "reply": reply,
-            "suggested_topic": speaking_prompt,
+            "suggested_topic": follow_up_question,
             "vocabulary": "; ".join(vocabulary_suggestions),
             "confidence_tip": "Speak slowly first, then repeat once with stronger voice.",
         }
@@ -69,8 +69,8 @@ class TemporaryConversationalResponseEngine:
 
     def _build_reply(self, *, grammar_analysis: GrammarAnalysis, fluency_score: int) -> str:
         if grammar_analysis.has_grammar_mistakes:
-            return f"Good practice. Your fluency score is {fluency_score}/100. Now repeat the corrected sentence aloud and add one more detail."
-        return f"Nice sentence. Your fluency score is {fluency_score}/100. Try saying it aloud with clear stress on the key words."
+            return f"Good practice, your fluency score is {fluency_score}/100."
+        return f"Nice sentence, your fluency score is {fluency_score}/100."
 
     @staticmethod
     def _score_fluency(text: str, grammar_analysis: GrammarAnalysis) -> int:
@@ -90,7 +90,7 @@ class TemporaryConversationalResponseEngine:
     @staticmethod
     def _build_explanation(grammar_analysis: GrammarAnalysis) -> str:
         if not grammar_analysis.has_grammar_mistakes:
-            return "Your sentence is clear. I polished it to sound more natural for speaking."
+            return "Your sentence is clear; I polished it to sound more natural."
         mistakes = ", ".join(grammar_analysis.detected_mistakes[:2]) or "grammar"
-        return f"I adjusted the {mistakes} so the sentence sounds clearer when spoken."
+        return f"I adjusted the {mistakes} so it sounds clearer."
 
