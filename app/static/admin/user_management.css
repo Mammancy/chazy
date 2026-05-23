@@ -1,0 +1,115 @@
+.user-management-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.user-toolbar {
+    margin-bottom: 16px;
+}
+
+.profile-panel {
+    position: sticky;
+    top: 24px;
+}
+
+.profile-details {
+    display: grid;
+    gap: 10px;
+}
+
+.profile-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.profile-row span:first-child {
+    color: var(--muted);
+    font-size: .88rem;
+}
+
+.profile-row span:last-child {
+    text-align: right;
+    font-weight: 650;
+}
+
+.profile-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.activity-list {
+    display: grid;
+    gap: 10px;
+}
+
+.activity-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    background: color-mix(in srgb, var(--surface) 88%, var(--surface-muted));
+    animation: fadeSlide .22s ease-out;
+}
+
+.activity-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.activity-detail {
+    color: var(--muted);
+    font-size: .9rem;
+    margin: 0;
+}
+
+.empty-state {
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.user-row {
+    cursor: pointer;
+    transition: background .18s ease, transform .18s ease;
+}
+
+.user-row:hover {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+@keyframes fadeSlide {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 1180px) {
+    .user-management-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-panel {
+        position: static;
+    }
+}
+
+@media (max-width: 640px) {
+    .profile-actions {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,48 @@
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class AdminUserSummaryResponse(BaseModel):
+    id: int
+    email: str | None
+    full_name: str | None
+    phone_number: str | None
+    country: str | None
+    state: str | None
+    timezone: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    conversation_count: int
+    message_count: int
+    last_activity_at: datetime | None
+
+
+class AdminUserListResponse(BaseModel):
+    users: list[AdminUserSummaryResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminUserActivityResponse(BaseModel):
+    type: str
+    title: str
+    detail: str
+    occurred_at: datetime
+
+
+class AdminUserProfileResponse(BaseModel):
+    user: AdminUserSummaryResponse
+    activity_history: list[AdminUserActivityResponse]
+
+
+class AdminUserStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class AdminUserStatusResponse(BaseModel):
+    success: bool
+    message: str
+    user: AdminUserSummaryResponse
