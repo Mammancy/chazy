@@ -1,5 +1,6 @@
 ﻿"""ORM models package."""
 
+from app.models.achievement import AchievementAward
 from app.models.base import Base
 from app.models.conversation import Conversation
 from app.models.conversation_scenario import ConversationScenarioSession, ConversationScenarioTurn
@@ -23,6 +24,7 @@ from app.models.vocabulary_notebook import (
 
 __all__ = [
     "Base",
+    "AchievementAward",
     "User",
     "Conversation",
     "ConversationScenarioSession",
