@@ -33,6 +33,18 @@ class CoachingMetricsResponse(BaseModel):
     mistake_summary: str
 
 
+class GuidedLearningSessionResponse(BaseModel):
+    follow_up_questions: list[str] = Field(default_factory=list)
+    topic_suggestions: list[str] = Field(default_factory=list)
+    conversation_mission: str = ""
+    vocabulary_challenge: str = ""
+    roleplay_scenario: str = ""
+    completion_progress: dict[str, Any] = Field(default_factory=dict)
+    achievements: list[str] = Field(default_factory=list)
+    streak_update: str = ""
+    learning_milestone: str = ""
+
+
 class ChatResponse(BaseModel):
     session_id: str
     user_id: int
@@ -57,6 +69,7 @@ class ChatResponse(BaseModel):
     daily_challenge: str
     speaking_prompt: str
     mistake_summary: str
+    guided_session: GuidedLearningSessionResponse
     coaching_context: dict[str, Any]
     request_id: str | None = None
     created_at: datetime

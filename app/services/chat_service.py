@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai import OpenAIService, TemporaryConversationalResponseEngine
@@ -13,7 +13,13 @@ from app.ai.personality import CHAZY_SYSTEM_PROMPT
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
-from app.schemas.chat import ChatRequest, ChatResponse, ConversationHistoryMessage, ConversationHistoryResponse
+from app.schemas.chat import (
+    ChatRequest,
+    ChatResponse,
+    ConversationHistoryMessage,
+    ConversationHistoryResponse,
+    GuidedLearningSessionResponse,
+)
 from app.services.coaching_service import CoachingMetrics, CoachingService
 from app.services.conversation_scenario_service import ConversationScenarioService
 from app.services.hausa_learning_service import HausaLearningService
@@ -106,6 +112,14 @@ class ChatService:
             )
             learning_response = self._with_scenario_guidance(learning_response, scenario_turn)
             response_source = f"{response_source}+scenario"
+        guided_session = self._build_guided_session(
+            payload=payload,
+            conversation=conversation,
+            grammar_analysis=grammar_analysis,
+            coaching_metrics=coaching_metrics,
+            learning_response=learning_response,
+            scenario_turn=scenario_turn,
+        )
 
         assistant_message_record = self.memory_service.store_conversation_history(
             conversation_id=conversation.id,
@@ -125,6 +139,7 @@ class ChatService:
                 "translation_explanation": hausa_result.explanation if hausa_result.is_hausa else None,
                 "scenario_turn": scenario_turn.model_dump() if scenario_turn is not None else None,
                 "learning_response": learning_response,
+                "guided_session": guided_session.model_dump(),
                 "coaching_context": coaching_context,
                 "saved_automatically": True,
                 "paired_user_message_id": user_message_record.id,
@@ -155,6 +170,7 @@ class ChatService:
             daily_challenge=coaching_metrics.daily_challenge,
             speaking_prompt=coaching_metrics.speaking_prompt,
             mistake_summary=coaching_metrics.mistake_summary,
+            guided_session=guided_session,
             coaching_context=coaching_context,
             request_id=request_id,
             created_at=datetime.now(timezone.utc),
@@ -295,6 +311,155 @@ class ChatService:
         enhanced["confidence_tip"] = scenario_turn.coaching_tip
         enhanced["explanation"] = self._first_sentence(scenario_turn.feedback)
         return enhanced
+
+    def _build_guided_session(
+        self,
+        *,
+        payload: ChatRequest,
+        conversation: Conversation,
+        grammar_analysis: GrammarAnalysis,
+        coaching_metrics: CoachingMetrics,
+        learning_response: dict[str, str],
+        scenario_turn=None,
+    ) -> GuidedLearningSessionResponse:
+        turn_count = self.db.scalar(
+            select(func.count(Message.id)).where(
+                Message.conversation_id == conversation.id,
+                Message.role == "user",
+            )
+        ) or 0
+        mission_target = 5
+        progress_percent = min(100, int((turn_count / mission_target) * 100))
+        follow_ups = self._unique_short_list(
+            [
+                learning_response.get("suggested_topic", ""),
+                coaching_metrics.speaking_prompt,
+            ],
+            limit=2,
+        )
+        topics = self._topic_suggestions(payload.practice_mode, grammar_analysis, coaching_metrics)
+        vocabulary_hint = (
+            coaching_metrics.vocabulary_suggestions[0]
+            if coaching_metrics.vocabulary_suggestions
+            else learning_response.get("vocabulary", "")
+        )
+        achievements = self._guided_achievements(
+            turn_count=turn_count,
+            practice_mode=payload.practice_mode,
+            grammar_analysis=grammar_analysis,
+            fluency_score=coaching_metrics.fluency_score,
+        )
+        return GuidedLearningSessionResponse(
+            follow_up_questions=follow_ups,
+            topic_suggestions=topics,
+            conversation_mission=self._conversation_mission(payload.practice_mode, grammar_analysis),
+            vocabulary_challenge=self._vocabulary_challenge(vocabulary_hint),
+            roleplay_scenario=self._roleplay_scenario(payload.practice_mode, scenario_turn),
+            completion_progress={
+                "conversation_turns": turn_count,
+                "mission_target_turns": mission_target,
+                "mission_progress_percent": progress_percent,
+                "fluency_score": coaching_metrics.fluency_score,
+            },
+            achievements=achievements,
+            streak_update=self._streak_update(turn_count),
+            learning_milestone=self._learning_milestone(turn_count, coaching_metrics.fluency_score),
+        )
+
+    def _topic_suggestions(
+        self,
+        practice_mode: str,
+        grammar_analysis: GrammarAnalysis,
+        coaching_metrics: CoachingMetrics,
+    ) -> list[str]:
+        topics = []
+        if grammar_analysis.detected_mistakes:
+            topics.append(f"Practice {grammar_analysis.detected_mistakes[0].replace('_', ' ')}")
+        if practice_mode == "voice":
+            topics.append("Speak your answer aloud")
+        elif practice_mode == "scenario":
+            topics.append("Continue the roleplay")
+        else:
+            topics.append("Answer with two full sentences")
+        if coaching_metrics.vocabulary_suggestions:
+            topics.append("Use one stronger word")
+        return self._unique_short_list(topics, limit=3)
+
+    @staticmethod
+    def _conversation_mission(practice_mode: str, grammar_analysis: GrammarAnalysis) -> str:
+        if practice_mode == "voice":
+            return "Say your next answer aloud, then type the clearest version."
+        if practice_mode == "scenario":
+            return "Stay in character and answer with one natural sentence."
+        if grammar_analysis.has_grammar_mistakes:
+            return "Rewrite the corrected sentence, then add one new detail."
+        return "Answer the follow-up with two complete sentences."
+
+    @staticmethod
+    def _vocabulary_challenge(vocabulary_hint: str) -> str:
+        clean = " ".join(str(vocabulary_hint or "").split())
+        if not clean:
+            return "Use one specific adjective in your next answer."
+        return f"Use this in your next reply: {clean}"
+
+    @staticmethod
+    def _roleplay_scenario(practice_mode: str, scenario_turn) -> str:
+        if scenario_turn is not None:
+            return "Roleplay: continue this real-life conversation naturally."
+        if practice_mode == "voice":
+            return "Roleplay: explain your opinion to a friendly classmate."
+        return "Roleplay: answer like you are speaking to a coworker."
+
+    @staticmethod
+    def _guided_achievements(
+        *,
+        turn_count: int,
+        practice_mode: str,
+        grammar_analysis: GrammarAnalysis,
+        fluency_score: int,
+    ) -> list[str]:
+        achievements = []
+        if turn_count == 1:
+            achievements.append("First conversation turn")
+        if turn_count in {3, 5, 10}:
+            achievements.append(f"{turn_count} speaking turns completed")
+        if practice_mode == "voice":
+            achievements.append("Voice practice started")
+        if grammar_analysis.has_grammar_mistakes:
+            achievements.append("Grammar correction reviewed")
+        if fluency_score >= 75:
+            achievements.append("Strong fluency score")
+        return achievements[:3]
+
+    @staticmethod
+    def _streak_update(turn_count: int) -> str:
+        if turn_count <= 1:
+            return "Daily streak started."
+        return f"Daily streak active with {turn_count} practice turns today."
+
+    @staticmethod
+    def _learning_milestone(turn_count: int, fluency_score: int) -> str:
+        if turn_count >= 10:
+            return "Milestone: extended conversation practice completed."
+        if turn_count >= 5:
+            return "Milestone: five-turn speaking practice completed."
+        if fluency_score >= 75:
+            return "Milestone: clear and confident sentence."
+        return "Milestone: keep building this conversation."
+
+    @staticmethod
+    def _unique_short_list(values: list[str], *, limit: int) -> list[str]:
+        seen = set()
+        cleaned = []
+        for value in values:
+            item = " ".join(str(value or "").split())
+            if not item or item.lower() in seen:
+                continue
+            seen.add(item.lower())
+            cleaned.append(item[:120])
+            if len(cleaned) >= limit:
+                break
+        return cleaned
 
     @staticmethod
     def _first_sentence(text: str | None) -> str:
