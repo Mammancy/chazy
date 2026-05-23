@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("themeToggle").addEventListener("click", toggleTheme);
     document.getElementById("sidebarToggle").addEventListener("click", () => {
         document.getElementById("sidebar").classList.toggle("open");
+        document.body.classList.toggle("sidebar-collapsed");
     });
     document.getElementById("refreshButton").addEventListener("click", loadUsers);
     document.getElementById("searchButton").addEventListener("click", loadUsers);

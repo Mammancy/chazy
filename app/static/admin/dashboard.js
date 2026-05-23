@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("windowSelect").addEventListener("change", loadDashboard);
     document.getElementById("sidebarToggle").addEventListener("click", () => {
         document.getElementById("sidebar").classList.toggle("open");
+        document.body.classList.toggle("sidebar-collapsed");
     });
     loadDashboard();
 });
