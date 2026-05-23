@@ -55,3 +55,15 @@ async def admin_learning_analytics(request: Request) -> HTMLResponse:
             "analytics_endpoint": "/api/v1/admin/analytics/dashboard",
         },
     )
+
+
+@router.get("/admin/conversations", response_class=HTMLResponse, include_in_schema=False)
+async def admin_conversation_analytics(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "admin/conversations.html",
+        {
+            "app_name": "Chazy",
+            "analytics_endpoint": "/api/v1/admin/analytics/dashboard",
+        },
+    )

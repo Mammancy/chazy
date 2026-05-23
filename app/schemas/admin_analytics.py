@@ -17,6 +17,15 @@ class AdminCategoryCountResponse(BaseModel):
     count: int
 
 
+class AdminConversationAnalyticsResponse(BaseModel):
+    average_session_duration_minutes: float
+    median_session_duration_minutes: float
+    average_messages_per_conversation: float
+    active_conversation_days: int
+    feature_usage: list[AdminCategoryCountResponse]
+    engagement_by_hour: list[AdminTrendPointResponse]
+
+
 class AdminAnalyticsSectionResponse(BaseModel):
     title: str
     metrics: list[AdminMetricResponse]
@@ -48,6 +57,7 @@ class AdminAnalyticsDashboardResponse(BaseModel):
     challenge_participation: AdminAnalyticsSectionResponse
     learning_progress: AdminAnalyticsSectionResponse
     learning_issue_categories: list[AdminCategoryCountResponse]
+    conversation_analytics: AdminConversationAnalyticsResponse
     trends: dict[str, list[AdminTrendPointResponse]]
     api_consumption: AdminApiConsumptionResponse
     system_health: AdminSystemHealthResponse

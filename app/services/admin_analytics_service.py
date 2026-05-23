@@ -20,6 +20,7 @@ from app.schemas.admin_analytics import (
     AdminAnalyticsSectionResponse,
     AdminApiConsumptionResponse,
     AdminCategoryCountResponse,
+    AdminConversationAnalyticsResponse,
     AdminMetricResponse,
     AdminSystemHealthResponse,
     AdminTrendPointResponse,
@@ -108,10 +109,12 @@ class AdminAnalyticsService:
                 ],
             ),
             learning_issue_categories=self._learning_issue_categories(learning_issues),
+            conversation_analytics=self._conversation_analytics(conversations, messages, since),
             trends={
                 "new_users": self._daily_trend([user.created_at for user in users], since, window_days),
                 "daily_active_users": self._daily_active_trend(recent_messages, since, window_days),
                 "messages": self._daily_trend([message.created_at for message in messages], since, window_days),
+                "conversations": self._daily_trend([conversation.created_at for conversation in conversations], since, window_days),
                 "challenge_completions": self._daily_trend([item.completed_at for item in challenge_completions], since, window_days),
                 "vocabulary_words": self._daily_trend([item.created_at for item in vocabulary_entries], since, window_days),
                 "fluency_score": self._daily_fluency_trend(messages, since, window_days),
@@ -225,6 +228,60 @@ class AdminAnalyticsService:
             for category, count in counts.most_common()
         ]
 
+    def _conversation_analytics(
+        self,
+        conversations: list[Conversation],
+        messages: list[Message],
+        since: datetime,
+    ) -> AdminConversationAnalyticsResponse:
+        messages_by_conversation: dict[int, list[Message]] = {}
+        for message in messages:
+            messages_by_conversation.setdefault(message.conversation_id, []).append(message)
+
+        durations: list[float] = []
+        for conversation_id, conversation_messages in messages_by_conversation.items():
+            if conversation_id is None or len(conversation_messages) < 2:
+                continue
+            ordered = sorted(conversation_messages, key=lambda item: self._aware(item.created_at))
+            duration_seconds = (
+                self._aware(ordered[-1].created_at) - self._aware(ordered[0].created_at)
+            ).total_seconds()
+            durations.append(max(0, duration_seconds / 60))
+
+        recent_user_messages = [
+            message
+            for message in messages
+            if message.role == "user" and self._in_window(message.created_at, since)
+        ]
+        feature_counts = Counter()
+        hour_counts = Counter()
+        for message in recent_user_messages:
+            metadata = message.metadata_json or {}
+            feature = metadata.get("practice_mode") or metadata.get("mode") or "chat"
+            feature_counts[str(feature)] += 1
+            hour_counts[str(self._aware(message.created_at).hour).zfill(2)] += 1
+
+        engagement_by_hour = [
+            AdminTrendPointResponse(date=f"{hour:02d}:00", value=hour_counts.get(f"{hour:02d}", 0))
+            for hour in range(24)
+        ]
+        active_days = {
+            self._aware(conversation.created_at).date().isoformat()
+            for conversation in conversations
+            if self._in_window(conversation.created_at, since)
+        }
+        return AdminConversationAnalyticsResponse(
+            average_session_duration_minutes=round(sum(durations) / len(durations), 1) if durations else 0.0,
+            median_session_duration_minutes=self._median(durations),
+            average_messages_per_conversation=self._average(len(messages), max(len(conversations), 1)),
+            active_conversation_days=len(active_days),
+            feature_usage=[
+                AdminCategoryCountResponse(category=category, count=count)
+                for category, count in feature_counts.most_common()
+            ],
+            engagement_by_hour=engagement_by_hour,
+        )
+
     def _distinct_challenge_learners(self, completions: list[SpeakingChallengeCompletion]) -> int:
         user_ids = {item.user_id for item in completions if item.user_id is not None}
         session_ids = {item.client_session_id for item in completions if item.user_id is None and item.client_session_id}
@@ -232,6 +289,15 @@ class AdminAnalyticsService:
 
     def _average(self, numerator: int, denominator: int) -> float:
         return round(numerator / denominator, 1) if denominator else 0.0
+
+    def _median(self, values: list[float]) -> float:
+        if not values:
+            return 0.0
+        sorted_values = sorted(values)
+        midpoint = len(sorted_values) // 2
+        if len(sorted_values) % 2:
+            return round(sorted_values[midpoint], 1)
+        return round((sorted_values[midpoint - 1] + sorted_values[midpoint]) / 2, 1)
 
     def _in_window(self, value: datetime | None, since: datetime) -> bool:
         return value is not None and self._aware(value) >= since
