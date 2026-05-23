@@ -7,6 +7,7 @@ from app.models.learning_analytics import LearningIssue
 from app.models.memory import Memory
 from app.models.memory_summary import MemorySummary
 from app.models.message import Message
+from app.models.placement_assessment import PlacementAssessmentAnswer, PlacementAssessmentSession
 from app.models.pronunciation import (
     PronunciationExercise,
     PronunciationPracticeAttempt,
@@ -30,6 +31,8 @@ __all__ = [
     "Message",
     "Memory",
     "MemorySummary",
+    "PlacementAssessmentSession",
+    "PlacementAssessmentAnswer",
     "PronunciationExercise",
     "PronunciationPracticeSession",
     "PronunciationPracticeAttempt",
