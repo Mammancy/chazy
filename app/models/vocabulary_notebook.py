@@ -1,0 +1,36 @@
+from __future__ import annotations
+
+from datetime import date, datetime
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base
+
+
+class VocabularyNotebookEntry(Base):
+    __tablename__ = "vocabulary_notebook_entries"
+    __table_args__ = (
+        UniqueConstraint("session_id", "user_id", "word", name="uq_vocabulary_notebook_word"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    session_id: Mapped[str] = mapped_column(String(128), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    source_message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True, index=True)
+    word: Mapped[str] = mapped_column(String(120), index=True)
+    meaning: Mapped[str] = mapped_column(Text)
+    example_sentence: Mapped[str] = mapped_column(Text)
+    mastery_status: Mapped[str] = mapped_column(String(32), default="new", index=True)
+    review_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    times_reviewed: Mapped[int] = mapped_column(Integer, default=0)
+    correct_review_count: Mapped[int] = mapped_column(Integer, default=0)
+    bookmarked: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
