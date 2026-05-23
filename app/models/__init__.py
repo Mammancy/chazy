@@ -2,6 +2,7 @@
 
 from app.models.base import Base
 from app.models.conversation import Conversation
+from app.models.conversation_scenario import ConversationScenarioSession, ConversationScenarioTurn
 from app.models.learning_analytics import LearningIssue
 from app.models.memory import Memory
 from app.models.memory_summary import MemorySummary
@@ -23,6 +24,8 @@ __all__ = [
     "Base",
     "User",
     "Conversation",
+    "ConversationScenarioSession",
+    "ConversationScenarioTurn",
     "LearningIssue",
     "Message",
     "Memory",

@@ -9,7 +9,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User input message")
     user_id: int | None = Field(default=None, description="Optional known user id")
     conversation_id: int | None = Field(default=None, description="Optional known conversation id")
-    practice_mode: str = Field(default="chat", description="chat, voice, challenge, vocabulary, or hausa")
+    practice_mode: str = Field(default="chat", description="chat, voice, challenge, vocabulary, hausa, or scenario")
 
 
 class EnglishLearningFeedback(BaseModel):

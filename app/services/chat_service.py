@@ -15,6 +15,7 @@ from app.models.message import Message
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse, ConversationHistoryMessage, ConversationHistoryResponse
 from app.services.coaching_service import CoachingMetrics, CoachingService
+from app.services.conversation_scenario_service import ConversationScenarioService
 from app.services.hausa_learning_service import HausaLearningService
 from app.services.learning_analytics_service import LearningAnalyticsService
 from app.services.memory_management_service import MemoryManagementService
@@ -91,6 +92,17 @@ class ChatService:
         )
         if hausa_result.is_hausa:
             learning_response = self._with_hausa_guidance(learning_response, hausa_result)
+        scenario_turn = None
+        if payload.practice_mode == "scenario":
+            scenario_turn = ConversationScenarioService(self.db).chat_mode_reply(
+                session_id=payload.session_id,
+                user_id=user.id,
+                conversation_id=conversation.id,
+                message=coaching_text,
+                user_message_id=user_message_record.id,
+            )
+            learning_response = self._with_scenario_guidance(learning_response, scenario_turn)
+            response_source = f"{response_source}+scenario"
 
         assistant_message_record = self.memory_service.store_conversation_history(
             conversation_id=conversation.id,
@@ -107,6 +119,7 @@ class ChatService:
                 "input_language": "hausa" if hausa_result.is_hausa else "english",
                 "translated_english": hausa_result.english_text if hausa_result.is_hausa else None,
                 "translation_explanation": hausa_result.explanation if hausa_result.is_hausa else None,
+                "scenario_turn": scenario_turn.model_dump() if scenario_turn is not None else None,
                 "learning_response": learning_response,
                 "coaching_context": coaching_context,
                 "saved_automatically": True,
@@ -259,6 +272,20 @@ class ChatService:
         enhanced["confidence_tip"] = (
             "Start from your Hausa idea, say the English translation slowly, then repeat it with stronger voice."
         )
+        return enhanced
+
+    def _with_scenario_guidance(self, learning_response: dict[str, str], scenario_turn) -> dict[str, str]:
+        enhanced = dict(learning_response)
+        enhanced["reply"] = (
+            f"{scenario_turn.assistant_reply}\n\n"
+            f"Role-play feedback: {scenario_turn.feedback}"
+        ).strip()
+        enhanced["suggested_topic"] = scenario_turn.next_prompt
+        enhanced["confidence_tip"] = scenario_turn.coaching_tip
+        enhanced["explanation"] = (
+            f"{learning_response.get('explanation', '')}\n\n"
+            f"Scenario coaching: {scenario_turn.feedback}"
+        ).strip()
         return enhanced
 
     def _history_coaching_context(self, messages: list[Message]) -> dict[str, Any]:
