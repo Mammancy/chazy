@@ -67,3 +67,15 @@ async def admin_conversation_analytics(request: Request) -> HTMLResponse:
             "analytics_endpoint": "/api/v1/admin/analytics/dashboard",
         },
     )
+
+
+@router.get("/admin/openai-usage", response_class=HTMLResponse, include_in_schema=False)
+async def admin_openai_usage(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "admin/openai_usage.html",
+        {
+            "app_name": "Chazy",
+            "analytics_endpoint": "/api/v1/admin/analytics/dashboard",
+        },
+    )

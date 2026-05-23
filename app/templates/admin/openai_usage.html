@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ app_name }} Learning Analytics</title>
+    <title>{{ app_name }} OpenAI Usage</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/static/admin/dashboard.css" rel="stylesheet">
 </head>
@@ -20,13 +20,12 @@
         <nav class="nav flex-column sidebar-nav">
             <a class="nav-link" href="/admin/dashboard">Overview</a>
             <a class="nav-link" href="/admin/users">User Analytics</a>
-            <a class="nav-link active" href="/admin/learning">Learning Analytics</a>
+            <a class="nav-link" href="/admin/learning">Learning Analytics</a>
             <a class="nav-link" href="/admin/conversations">Conversation Analytics</a>
-            <a class="nav-link" href="/admin/openai-usage">OpenAI Usage</a>
-            <a class="nav-link" href="#mistakes">Mistakes</a>
-            <a class="nav-link" href="#vocabulary">Vocabulary</a>
-            <a class="nav-link" href="#challenges">Challenges</a>
-            <a class="nav-link" href="#fluency">Fluency</a>
+            <a class="nav-link active" href="/admin/openai-usage">OpenAI Usage</a>
+            <a class="nav-link" href="#tokens">Tokens</a>
+            <a class="nav-link" href="#requests">Requests</a>
+            <a class="nav-link" href="#users">User Usage</a>
         </nav>
     </aside>
 
@@ -34,8 +33,8 @@
         <header class="topbar">
             <button class="btn btn-outline-secondary d-lg-none" type="button" id="sidebarToggle" aria-label="Toggle navigation">Menu</button>
             <div>
-                <p class="eyebrow mb-1">Learning Analytics</p>
-                <h1 class="h3 mb-0">Mistakes, Vocabulary, Challenges, Fluency</h1>
+                <p class="eyebrow mb-1">OpenAI Monitoring</p>
+                <h1 class="h3 mb-0">Usage, Tokens, Cost, Requests</h1>
             </div>
             <div class="topbar-actions">
                 <select class="form-select" id="windowSelect" aria-label="Analytics window">
@@ -53,87 +52,86 @@
 
         <section class="status-row">
             <div class="status-card">
-                <span class="status-label">Tracked Issues</span>
-                <strong id="trackedIssues">0</strong>
+                <span class="status-label">Total Tokens</span>
+                <strong id="totalTokens">0</strong>
             </div>
             <div class="status-card">
-                <span class="status-label">Vocabulary Words</span>
-                <strong id="vocabularyWords">0</strong>
+                <span class="status-label">Requests</span>
+                <strong id="requestCount">0</strong>
             </div>
             <div class="status-card">
-                <span class="status-label">Challenges</span>
-                <strong id="completedChallenges">0</strong>
+                <span class="status-label">Estimated Cost</span>
+                <strong id="estimatedCost">$0.0000</strong>
             </div>
             <div class="status-card">
-                <span class="status-label">Latest Fluency</span>
-                <strong id="latestFluency">0</strong>
+                <span class="status-label">Avg Tokens / Request</span>
+                <strong id="avgTokens">0</strong>
             </div>
         </section>
 
-        <section class="dashboard-grid" id="mistakes">
-            <div class="panel">
-                <div class="panel-header">
-                    <div>
-                        <p class="eyebrow mb-1">Grammar Mistakes</p>
-                        <h2 class="h5 mb-0">Mistake Categories</h2>
-                    </div>
-                </div>
-                <canvas id="mistakeCategoryChart" height="170"></canvas>
-            </div>
-            <div class="panel">
-                <div class="panel-header">
-                    <div>
-                        <p class="eyebrow mb-1">Progress Statistics</p>
-                        <h2 class="h5 mb-0">Learning Metrics</h2>
-                    </div>
-                </div>
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <tbody id="learningStatsTable"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <section class="dashboard-grid" id="vocabulary">
+        <section class="dashboard-grid" id="tokens">
             <div class="panel panel-wide">
                 <div class="panel-header">
                     <div>
-                        <p class="eyebrow mb-1">Vocabulary</p>
-                        <h2 class="h5 mb-0">Vocabulary Growth Trend</h2>
+                        <p class="eyebrow mb-1">Token Consumption</p>
+                        <h2 class="h5 mb-0">Daily Estimated Tokens</h2>
                     </div>
                 </div>
-                <canvas id="vocabularyGrowthChart" height="120"></canvas>
+                <canvas id="tokenTrendChart" height="120"></canvas>
             </div>
             <div class="panel">
                 <div class="panel-header">
                     <div>
-                        <p class="eyebrow mb-1">Participation</p>
-                        <h2 class="h5 mb-0">Challenge Participation</h2>
+                        <p class="eyebrow mb-1">Token Split</p>
+                        <h2 class="h5 mb-0">Prompt vs Completion</h2>
                     </div>
                 </div>
-                <canvas id="challengeParticipationChart" height="170"></canvas>
+                <canvas id="tokenSplitChart" height="170"></canvas>
             </div>
         </section>
 
-        <section class="dashboard-grid" id="fluency">
-            <div class="panel panel-wide">
+        <section class="dashboard-grid" id="requests">
+            <div class="panel">
                 <div class="panel-header">
                     <div>
-                        <p class="eyebrow mb-1">Fluency</p>
-                        <h2 class="h5 mb-0">Fluency Score Trend</h2>
+                        <p class="eyebrow mb-1">Request Volume</p>
+                        <h2 class="h5 mb-0">Daily Requests</h2>
                     </div>
                 </div>
-                <canvas id="fluencyTrendChart" height="120"></canvas>
+                <canvas id="requestTrendChart" height="170"></canvas>
             </div>
             <div class="panel">
                 <div class="panel-header">
                     <div>
-                        <p class="eyebrow mb-1">Engagement</p>
-                        <h2 class="h5 mb-0">Practice Mix</h2>
+                        <p class="eyebrow mb-1">Costs</p>
+                        <h2 class="h5 mb-0">Daily Cost Estimate</h2>
                     </div>
                 </div>
-                <canvas id="practiceMixChart" height="170"></canvas>
+                <canvas id="costTrendChart" height="170"></canvas>
+            </div>
+        </section>
+
+        <section class="panel" id="users">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow mb-1">User-Level Usage</p>
+                    <h2 class="h5 mb-0">Top Users and Sessions by Token Usage</h2>
+                </div>
+            </div>
+            <p class="small text-secondary" id="usageDetail"></p>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>User / Session</th>
+                        <th>Requests</th>
+                        <th>Tokens</th>
+                        <th>Estimated Cost</th>
+                        <th>Last Seen</th>
+                    </tr>
+                    </thead>
+                    <tbody id="usageTable"></tbody>
+                </table>
             </div>
         </section>
     </main>
@@ -146,6 +144,6 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script src="/static/admin/learning.js"></script>
+<script src="/static/admin/openai_usage.js"></script>
 </body>
 </html>

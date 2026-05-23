@@ -40,6 +40,29 @@ class AdminApiConsumptionResponse(BaseModel):
     detail: str
 
 
+class AdminUserUsageResponse(BaseModel):
+    identity: str
+    display_name: str
+    request_count: int
+    estimated_tokens: int
+    estimated_cost_usd: float
+    last_seen_at: str | None
+
+
+class AdminOpenAIUsageResponse(BaseModel):
+    total_tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+    request_count: int
+    average_tokens_per_request: float
+    estimated_cost_usd: float
+    token_trend: list[AdminTrendPointResponse]
+    request_trend: list[AdminTrendPointResponse]
+    cost_trend: list[AdminTrendPointResponse]
+    user_usage: list[AdminUserUsageResponse]
+    detail: str
+
+
 class AdminSystemHealthResponse(BaseModel):
     status: str
     database_status: str
@@ -60,4 +83,5 @@ class AdminAnalyticsDashboardResponse(BaseModel):
     conversation_analytics: AdminConversationAnalyticsResponse
     trends: dict[str, list[AdminTrendPointResponse]]
     api_consumption: AdminApiConsumptionResponse
+    openai_usage: AdminOpenAIUsageResponse
     system_health: AdminSystemHealthResponse

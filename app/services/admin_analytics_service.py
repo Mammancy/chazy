@@ -22,8 +22,10 @@ from app.schemas.admin_analytics import (
     AdminCategoryCountResponse,
     AdminConversationAnalyticsResponse,
     AdminMetricResponse,
+    AdminOpenAIUsageResponse,
     AdminSystemHealthResponse,
     AdminTrendPointResponse,
+    AdminUserUsageResponse,
 )
 
 
@@ -120,6 +122,7 @@ class AdminAnalyticsService:
                 "fluency_score": self._daily_fluency_trend(messages, since, window_days),
             },
             api_consumption=self._api_consumption(messages),
+            openai_usage=self._openai_usage(messages, since, window_days),
             system_health=self._system_health(),
         )
 
@@ -133,10 +136,8 @@ class AdminAnalyticsService:
         )
 
     def _api_consumption(self, messages: list[Message]) -> AdminApiConsumptionResponse:
-        saved_tokens = sum(message.token_count or 0 for message in messages)
-        estimated_from_text = sum(max(1, len(message.content) // 4) for message in messages if not message.token_count)
-        total_tokens = saved_tokens + estimated_from_text
-        completion_tokens = sum(max(1, len(message.content) // 4) for message in messages if message.role == "assistant")
+        total_tokens = sum(self._message_token_estimate(message) for message in messages)
+        completion_tokens = sum(self._message_token_estimate(message) for message in messages if message.role == "assistant")
         prompt_tokens = max(0, total_tokens - completion_tokens)
         request_count = self.db.query(func.count(Message.id)).filter(Message.role == "user").scalar() or 0
         return AdminApiConsumptionResponse(
@@ -147,6 +148,97 @@ class AdminAnalyticsService:
             estimated_cost_usd=round((total_tokens / 1_000_000) * 0.60, 4),
             detail="Estimate uses saved token counts when available and falls back to roughly 4 characters per token.",
         )
+
+    def _openai_usage(self, messages: list[Message], since: datetime, window_days: int) -> AdminOpenAIUsageResponse:
+        user_messages = [message for message in messages if message.role == "user"]
+        assistant_messages = [message for message in messages if message.role == "assistant"]
+        total_tokens = sum(self._message_token_estimate(message) for message in messages)
+        completion_tokens = sum(self._message_token_estimate(message) for message in assistant_messages)
+        prompt_tokens = max(0, total_tokens - completion_tokens)
+        request_count = len(user_messages)
+
+        token_counts = Counter()
+        request_counts = Counter()
+        for message in messages:
+            if self._in_window(message.created_at, since):
+                day = self._aware(message.created_at).date().isoformat()
+                token_counts[day] += self._message_token_estimate(message)
+                if message.role == "user":
+                    request_counts[day] += 1
+
+        token_trend = []
+        request_trend = []
+        cost_trend = []
+        now = datetime.now(timezone.utc)
+        for offset in range(window_days - 1, -1, -1):
+            day = (now - timedelta(days=offset)).date().isoformat()
+            tokens = token_counts.get(day, 0)
+            requests = request_counts.get(day, 0)
+            token_trend.append(AdminTrendPointResponse(date=day, value=tokens))
+            request_trend.append(AdminTrendPointResponse(date=day, value=requests))
+            cost_trend.append(AdminTrendPointResponse(date=day, value=round((tokens / 1_000_000) * 60)))
+
+        return AdminOpenAIUsageResponse(
+            total_tokens=total_tokens,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            request_count=request_count,
+            average_tokens_per_request=round(total_tokens / request_count, 1) if request_count else 0.0,
+            estimated_cost_usd=round((total_tokens / 1_000_000) * 0.60, 4),
+            token_trend=token_trend,
+            request_trend=request_trend,
+            cost_trend=cost_trend,
+            user_usage=self._user_usage(messages),
+            detail="OpenAI usage is estimated from saved Chazy message token counts; missing token counts use a 4-characters-per-token fallback.",
+        )
+
+    def _user_usage(self, messages: list[Message]) -> list[AdminUserUsageResponse]:
+        usage: dict[str, dict] = {}
+        for message in messages:
+            identity, display_name = self._usage_identity(message)
+            record = usage.setdefault(
+                identity,
+                {
+                    "display_name": display_name,
+                    "request_count": 0,
+                    "estimated_tokens": 0,
+                    "last_seen_at": None,
+                },
+            )
+            record["estimated_tokens"] += self._message_token_estimate(message)
+            if message.role == "user":
+                record["request_count"] += 1
+            current_seen = self._aware(message.created_at)
+            if record["last_seen_at"] is None or current_seen > record["last_seen_at"]:
+                record["last_seen_at"] = current_seen
+
+        rows = []
+        for identity, record in usage.items():
+            rows.append(
+                AdminUserUsageResponse(
+                    identity=identity,
+                    display_name=record["display_name"],
+                    request_count=record["request_count"],
+                    estimated_tokens=record["estimated_tokens"],
+                    estimated_cost_usd=round((record["estimated_tokens"] / 1_000_000) * 0.60, 4),
+                    last_seen_at=record["last_seen_at"].isoformat() if record["last_seen_at"] else None,
+                )
+            )
+        return sorted(rows, key=lambda item: item.estimated_tokens, reverse=True)[:25]
+
+    def _usage_identity(self, message: Message) -> tuple[str, str]:
+        if message.user_id is not None:
+            return f"user:{message.user_id}", f"User {message.user_id}"
+        metadata = message.metadata_json or {}
+        session_id = metadata.get("session_id")
+        if session_id:
+            return f"session:{session_id}", f"Session {session_id}"
+        return "anonymous", "Anonymous"
+
+    def _message_token_estimate(self, message: Message) -> int:
+        if message.token_count:
+            return message.token_count
+        return max(1, len(message.content or "") // 4)
 
     def _system_health(self) -> AdminSystemHealthResponse:
         settings = get_settings()
