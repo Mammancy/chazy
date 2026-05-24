@@ -44,6 +44,7 @@ class AuthService:
             state=payload.state.strip(),
             password_hash=self._hash_password(payload.password),
             timezone="Africa/Lagos",
+            role="admin" if email in self.settings.admin_emails else "user",
             is_active=True,
         )
         self.db.add(user)

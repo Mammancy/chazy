@@ -126,7 +126,7 @@ async function updateStatus(isActive) {
     try {
         const response = await fetch(`${window.CHazyAdminConfig.usersEndpoint}/${selectedUserId}/status`, {
             method: "PATCH",
-            headers: {"Content-Type": "application/json", "Accept": "application/json"},
+            headers: adminJsonHeaders(),
             body: JSON.stringify({is_active: isActive})
         });
         if (!response.ok) {
@@ -151,7 +151,10 @@ async function deleteSelectedUser() {
     }
     hideAlerts();
     try {
-        const response = await fetch(`${window.CHazyAdminConfig.usersEndpoint}/${selectedUserId}`, {method: "DELETE"});
+        const response = await fetch(`${window.CHazyAdminConfig.usersEndpoint}/${selectedUserId}`, {
+            method: "DELETE",
+            headers: adminJsonHeaders(false)
+        });
         if (!response.ok) {
             throw new Error(`Delete returned HTTP ${response.status}`);
         }
@@ -205,6 +208,17 @@ function showSuccess(message) {
 function hideAlerts() {
     document.getElementById("errorBox").classList.add("d-none");
     document.getElementById("successBox").classList.add("d-none");
+}
+
+function adminJsonHeaders(includeContentType = true) {
+    const headers = {
+        "Accept": "application/json",
+        "X-CSRF-Token": window.CHazyAdminConfig.csrfToken || ""
+    };
+    if (includeContentType) {
+        headers["Content-Type"] = "application/json";
+    }
+    return headers;
 }
 
 function formatNumber(value) {

@@ -50,6 +50,13 @@ class Settings(BaseModel):
     jwt_access_token_minutes: int = Field(default=_env_int("JWT_ACCESS_TOKEN_MINUTES", 30))
     jwt_refresh_token_days: int = Field(default=_env_int("JWT_REFRESH_TOKEN_DAYS", 30))
     jwt_issuer: str = Field(default=os.getenv("JWT_ISSUER", "chazy-api"))
+    admin_emails: list[str] = Field(
+        default_factory=lambda: [
+            email.strip().lower()
+            for email in os.getenv("ADMIN_EMAILS", "").split(",")
+            if email.strip()
+        ]
+    )
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             origin.strip()

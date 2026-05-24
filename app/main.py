@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config.settings import get_settings
 from app.ai.startup_validation import validate_openai_startup_configuration
 from app.database.session import close_db, init_db
+from app.middleware.admin_authorization import AdminAuthorizationMiddleware
 from app.routes.admin_dashboard import router as admin_dashboard_router
 from app.routes.openai_diagnostic import router as openai_diagnostic_router
 from app.routes.router import api_router
@@ -42,6 +43,7 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(AdminAuthorizationMiddleware)
 
     app.mount(
         "/static",

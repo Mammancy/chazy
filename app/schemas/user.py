@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     state: str | None = Field(default=None, max_length=100)
     timezone: str = Field(default="Africa/Lagos", max_length=64)
     response_length_preference: ResponseLengthPreference = "SHORT"
+    role: str = Field(default="user", max_length=32)
     is_active: bool = True
 
 
@@ -31,6 +32,7 @@ class UserUpdate(BaseModel):
     state: str | None = Field(default=None, max_length=100)
     timezone: str | None = Field(default=None, max_length=64)
     response_length_preference: ResponseLengthPreference | None = None
+    role: str | None = Field(default=None, max_length=32)
     is_active: bool | None = None
 
 

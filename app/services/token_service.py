@@ -41,11 +41,15 @@ class TokenService:
 
     @classmethod
     def decode_access_token(cls, token: str) -> int:
-        return cls._decode(token, expected_type="access")
+        return int(cls._decode_payload(token, expected_type="access")["sub"])
+
+    @classmethod
+    def decode_access_claims(cls, token: str) -> dict[str, Any]:
+        return cls._decode_payload(token, expected_type="access")
 
     @classmethod
     def decode_refresh_token(cls, token: str) -> int:
-        return cls._decode(token, expected_type="refresh")
+        return int(cls._decode_payload(token, expected_type="refresh")["sub"])
 
     @classmethod
     def _encode(cls, *, user: User, token_type: str, ttl_seconds: int) -> str:
@@ -59,13 +63,14 @@ class TokenService:
             "iat": now,
             "exp": now + ttl_seconds,
             "email": user.email,
+            "role": user.role,
         }
         signing_input = f"{cls._b64_json(header)}.{cls._b64_json(payload)}"
         signature = cls._sign(signing_input)
         return f"{signing_input}.{signature}"
 
     @classmethod
-    def _decode(cls, token: str, *, expected_type: str) -> int:
+    def _decode_payload(cls, token: str, *, expected_type: str) -> dict[str, Any]:
         settings = get_settings()
         try:
             header_raw, payload_raw, signature = token.split(".", 2)
@@ -88,9 +93,10 @@ class TokenService:
             raise TokenError("Token expired.")
 
         try:
-            return int(payload["sub"])
+            int(payload["sub"])
         except (KeyError, TypeError, ValueError) as exc:
             raise TokenError("Invalid token subject.") from exc
+        return payload
 
     @classmethod
     def _sign(cls, signing_input: str) -> str:
