@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.ai.english_learning_pipeline import EnglishLearningPipeline, GrammarAnalysis
 
@@ -27,14 +28,19 @@ class TemporaryConversationalResponseEngine:
         session_id: str,
         user_message: str,
         grammar_analysis: GrammarAnalysis | None = None,
+        coaching_context: dict[str, Any] | None = None,
     ) -> dict[str, str]:
         context = self._sessions.setdefault(session_id, SessionContext())
         grammar_analysis = grammar_analysis or self._english_pipeline.analyze(user_message)
         fluency_score = self._score_fluency(user_message, grammar_analysis)
         vocabulary_suggestions = self._suggest_vocabulary(user_message)
-        follow_up_question = "Can you say one more sentence about that?"
         self._remember_user_detail(context, user_message)
         self._append_message(context, role="user", content=user_message)
+        follow_up_question = self._build_follow_up_question(
+            user_message=user_message,
+            context=context,
+            coaching_context=coaching_context or {},
+        )
         reply = self._build_reply(grammar_analysis=grammar_analysis, fluency_score=fluency_score)
         self._append_message(context, role="assistant", content=reply)
         return {
@@ -66,6 +72,59 @@ class TemporaryConversationalResponseEngine:
             context.user_details["name"] = message[lower.index("my name is ") + len("my name is ") :].strip(" .,!?")
         if "i want to improve " in lower:
             context.user_details["goal"] = message[lower.index("i want to improve ") + len("i want to improve ") :].strip(" .,!?")
+        if "i like " in lower:
+            context.user_details["interest"] = message[lower.index("i like ") + len("i like ") :].strip(" .,!?")
+        if "my goal is " in lower:
+            context.user_details["goal"] = message[lower.index("my goal is ") + len("my goal is ") :].strip(" .,!?")
+
+    def _build_follow_up_question(
+        self,
+        *,
+        user_message: str,
+        context: SessionContext,
+        coaching_context: dict[str, Any],
+    ) -> str:
+        lower = user_message.lower()
+        goal = context.user_details.get("goal")
+        interest = context.user_details.get("interest")
+        practice_mode = str(coaching_context.get("mode") or "").lower()
+        mistakes = coaching_context.get("mistakes") or []
+        recent_topic = self._recent_user_topic(context)
+
+        if practice_mode == "scenario":
+            return "What would you say next in this situation?"
+        if practice_mode == "voice":
+            return "Can you say that idea aloud again with one extra detail?"
+        if "work" in lower or "job" in lower:
+            return "What is one task you usually do at work?"
+        if "school" in lower or "study" in lower:
+            return "What subject are you studying now?"
+        if "travel" in lower or "trip" in lower:
+            return "Where would you like to travel next, and why?"
+        if interest:
+            return f"What do you enjoy most about {interest}?"
+        if goal:
+            return f"What is one real situation where you want to use English for {goal}?"
+        if mistakes:
+            mistake = str(mistakes[0]).replace("_", " ")
+            return f"Can you make one more sentence while focusing on {mistake}?"
+        if recent_topic:
+            return f"What else can you say about {recent_topic}?"
+        return "Can you add one specific detail to that idea?"
+
+    @staticmethod
+    def _recent_user_topic(context: SessionContext) -> str:
+        for message in reversed(context.conversation_history):
+            if message.get("role") != "user":
+                continue
+            words = [
+                word.strip(".,!?;:").lower()
+                for word in message.get("content", "").split()
+                if len(word.strip(".,!?;:")) > 4
+            ]
+            if words:
+                return words[-1]
+        return ""
 
     def _build_reply(self, *, grammar_analysis: GrammarAnalysis, fluency_score: int) -> str:
         if grammar_analysis.has_grammar_mistakes:

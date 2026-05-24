@@ -296,7 +296,8 @@ class OpenAIService:
                 f"Response length instruction: {coaching_context.get('response_length_instruction', 'SHORT: keep the full response under 60 words.')}",
                 "Return strict JSON with correction, explanation, reply, suggested_topic, vocabulary, and confidence_tip.",
                 "For SHORT mode, keep all JSON values together under 60 words.",
-                "Keep explanation to one sentence, reply concise, and suggested_topic to one follow-up question.",
+                "Keep explanation to one sentence, reply concise, and suggested_topic to one contextual follow-up question.",
+                "The suggested_topic question must relate directly to the user's latest message, recent history, interests, goals, or recurring mistakes when that context exists.",
                 "Avoid bullets, lectures, essays, long paragraphs, and repeated explanations.",
             ]
         )

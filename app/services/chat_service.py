@@ -52,6 +52,7 @@ class ChatService:
         coaching_metrics = _COACHING_SERVICE.build_metrics(text=coaching_text, grammar_analysis=grammar_analysis)
         coaching_context = self._build_coaching_context(
             payload=payload,
+            conversation=conversation,
             grammar_analysis=grammar_analysis,
             coaching_metrics=coaching_metrics,
             response_length_preference=response_length_preference,
@@ -194,6 +195,7 @@ class ChatService:
                 session_id=session_id,
                 user_message=user_message,
                 grammar_analysis=grammar_analysis,
+                coaching_context=coaching_context,
             ),
         )
         return result.learning_response, result.source
@@ -246,6 +248,7 @@ class ChatService:
         self,
         *,
         payload: ChatRequest,
+        conversation: Conversation,
         grammar_analysis: GrammarAnalysis,
         coaching_metrics: CoachingMetrics,
         response_length_preference: str,
@@ -263,6 +266,12 @@ class ChatService:
             "vocabulary_suggestions": coaching_metrics.vocabulary_suggestions,
             "daily_challenge": coaching_metrics.daily_challenge,
             "speaking_prompt": coaching_metrics.speaking_prompt,
+            "recent_conversation": self._recent_conversation_context(conversation.id),
+            "follow_up_instruction": (
+                "Ask exactly one short follow-up question that is specific to the learner's latest "
+                "message, recent conversation, interests, goals, practice mode, or recurring mistakes. "
+                "Use generic follow-ups only when no meaningful context exists."
+            ),
         }
         if hausa_result is not None and hausa_result.is_hausa:
             context.update(
@@ -276,6 +285,28 @@ class ChatService:
                 }
             )
         return context
+
+    def _recent_conversation_context(self, conversation_id: int) -> list[dict[str, str]]:
+        messages = list(
+            self.db.scalars(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at.desc(), Message.id.desc())
+                .limit(8)
+            ).all()
+        )
+        recent = []
+        for message in reversed(messages):
+            content = " ".join(str(message.content or "").split())
+            if not content:
+                continue
+            recent.append(
+                {
+                    "role": message.role,
+                    "content": content[:220],
+                }
+            )
+        return recent
 
     def _resolve_response_length_preference(self, user: User, requested: str | None) -> str:
         if requested is not None:
