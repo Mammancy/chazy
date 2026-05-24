@@ -1,7 +1,10 @@
-﻿import logging
+import asyncio
+import json
+import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -43,6 +46,43 @@ async def chat(
     return result
 
 
+@router.post("/stream")
+async def chat_stream(
+    payload: ChatRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    service = ChatService(db)
+    client_request_id = request.headers.get("X-Client-Request-ID") or str(uuid4())
+
+    async def event_stream():
+        try:
+            result = await service.process_message(payload, request_id=client_request_id)
+            partial = ""
+            for word in result.assistant_message.split():
+                partial = f"{partial} {word}".strip()
+                yield _stream_event("partial", {"text": partial, "request_id": client_request_id})
+                await asyncio.sleep(0.035)
+            yield _stream_event("final", result.model_dump(mode="json"))
+        except Exception as exc:
+            logger.exception("chat_stream failed request_id=%s", client_request_id)
+            yield _stream_event("error", {"message": str(exc), "request_id": client_request_id})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "X-Backend-Request-ID": client_request_id,
+        },
+    )
+
+
+def _stream_event(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
 @router.get("/history", response_model=ConversationHistoryResponse)
 async def get_chat_history(
     session_id: str = Query(..., min_length=1),
@@ -66,6 +106,7 @@ async def get_chat_history(
 async def get_chat_history_by_conversation(
     conversation_id: int,
     session_id: str = Query(..., min_length=1),
+    user_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -78,4 +119,3 @@ async def get_chat_history_by_conversation(
         limit=limit,
         offset=offset,
     )
-
