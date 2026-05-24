@@ -96,6 +96,8 @@ class VocabularyNotebookService:
         message = self.db.get(Message, payload.message_id)
         if message is None:
             raise ValueError("Conversation message not found.")
+        if payload.user_id is not None and message.user_id is not None and message.user_id != payload.user_id:
+            raise PermissionError("Not authorized for this conversation message.")
         example = payload.example_sentence or self._sentence_for_word(message.content, payload.word)
         meaning = payload.meaning or self._meaning_from_message_metadata(message, payload.word)
         return self.create_entry(
@@ -110,19 +112,31 @@ class VocabularyNotebookService:
             )
         )
 
-    def update_entry(self, entry_id: int, payload: VocabularyEntryUpdate) -> VocabularyEntryResponse:
+    def update_entry(
+        self,
+        entry_id: int,
+        payload: VocabularyEntryUpdate,
+        user_id: int | None = None,
+    ) -> VocabularyEntryResponse:
         entry = self.db.get(VocabularyNotebookEntry, entry_id)
         if entry is None:
             raise ValueError("Vocabulary entry not found.")
+        self._authorize_entry(entry, user_id)
         self._apply_entry_update(entry, payload)
         self.db.commit()
         self.db.refresh(entry)
         return VocabularyEntryResponse.model_validate(entry)
 
-    def record_review(self, entry_id: int, payload: VocabularyReviewRequest) -> VocabularyEntryResponse:
+    def record_review(
+        self,
+        entry_id: int,
+        payload: VocabularyReviewRequest,
+        user_id: int | None = None,
+    ) -> VocabularyEntryResponse:
         entry = self.db.get(VocabularyNotebookEntry, entry_id)
         if entry is None:
             raise ValueError("Vocabulary entry not found.")
+        self._authorize_entry(entry, user_id)
         recall_quality = payload.recall_quality if payload.recall_quality is not None else (5 if payload.correct else 2)
         self._apply_spaced_repetition(entry, recall_quality, payload.next_review_date, payload.mastery_status)
         self.db.commit()
@@ -148,12 +162,17 @@ class VocabularyNotebookService:
             self.db.add(VocabularyReviewSessionItem(review_session_id=review_session.id, entry_id=entry.id))
         self.db.commit()
         self.db.refresh(review_session)
-        return self.get_review_session(review_session.id)
+        return self.get_review_session(review_session.id, user_id=payload.user_id)
 
-    def get_review_session(self, review_session_id: int) -> VocabularyReviewSessionResponse:
+    def get_review_session(
+        self,
+        review_session_id: int,
+        user_id: int | None = None,
+    ) -> VocabularyReviewSessionResponse:
         review_session = self.db.get(VocabularyReviewSession, review_session_id)
         if review_session is None:
             raise ValueError("Vocabulary review session not found.")
+        self._authorize_review_session(review_session, user_id)
         items = self._review_session_items(review_session.id)
         return self._review_session_response(review_session, items)
 
@@ -161,10 +180,12 @@ class VocabularyNotebookService:
         self,
         review_session_id: int,
         payload: VocabularyReviewSessionSubmit,
+        user_id: int | None = None,
     ) -> VocabularyReviewSessionResponse:
         review_session = self.db.get(VocabularyReviewSession, review_session_id)
         if review_session is None:
             raise ValueError("Vocabulary review session not found.")
+        self._authorize_review_session(review_session, user_id)
         item_by_id = {item.id: item for item in self._review_session_items(review_session.id)}
         for review in payload.reviews:
             item = item_by_id.get(review.item_id)
@@ -186,7 +207,7 @@ class VocabularyNotebookService:
             review_session.completed_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(review_session)
-        return self.get_review_session(review_session.id)
+        return self.get_review_session(review_session.id, user_id=user_id)
 
     def _apply_spaced_repetition(
         self,
@@ -256,6 +277,16 @@ class VocabularyNotebookService:
         if due_only:
             query = query.where(VocabularyNotebookEntry.review_date <= date.today())
         return query
+
+    @staticmethod
+    def _authorize_entry(entry: VocabularyNotebookEntry, user_id: int | None) -> None:
+        if user_id is not None and entry.user_id != user_id:
+            raise PermissionError("Not authorized for this vocabulary entry.")
+
+    @staticmethod
+    def _authorize_review_session(review_session: VocabularyReviewSession, user_id: int | None) -> None:
+        if user_id is not None and review_session.user_id != user_id:
+            raise PermissionError("Not authorized for this vocabulary review session.")
 
     def _existing(self, session_id: str, user_id: int | None, word: str) -> VocabularyNotebookEntry | None:
         return self.db.scalar(

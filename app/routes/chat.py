@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
+from app.dependencies.auth import authenticated_session_id, get_current_user
+from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse, ConversationHistoryResponse
 from app.services.chat_service import ChatService
 
@@ -20,19 +22,23 @@ async def chat(
     payload: ChatRequest,
     request: Request,
     response: Response,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> ChatResponse:
     service = ChatService(db)
     client_request_id = request.headers.get("X-Client-Request-ID") or str(uuid4())
+    secure_payload = payload.model_copy(
+        update={"session_id": authenticated_session_id(current_user), "user_id": current_user.id}
+    )
 
     logger.info(
         "chat_request start request_id=%s session_id=%s conversation_id=%s",
         client_request_id,
-        payload.session_id,
-        payload.conversation_id,
+        secure_payload.session_id,
+        secure_payload.conversation_id,
     )
 
-    result = await service.process_message(payload, request_id=client_request_id)
+    result = await service.process_message(secure_payload, request_id=client_request_id)
     response.headers["X-Backend-Request-ID"] = client_request_id
 
     logger.info(
@@ -50,14 +56,18 @@ async def chat(
 async def chat_stream(
     payload: ChatRequest,
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     service = ChatService(db)
     client_request_id = request.headers.get("X-Client-Request-ID") or str(uuid4())
+    secure_payload = payload.model_copy(
+        update={"session_id": authenticated_session_id(current_user), "user_id": current_user.id}
+    )
 
     async def event_stream():
         try:
-            result = await service.process_message(payload, request_id=client_request_id)
+            result = await service.process_message(secure_payload, request_id=client_request_id)
             partial = ""
             for word in result.assistant_message.split():
                 partial = f"{partial} {word}".strip()
@@ -90,13 +100,14 @@ async def get_chat_history(
     user_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ConversationHistoryResponse:
     service = ChatService(db)
     return service.get_conversation_history(
-        session_id=session_id,
+        session_id=authenticated_session_id(current_user),
         conversation_id=conversation_id,
-        user_id=user_id,
+        user_id=current_user.id,
         limit=limit,
         offset=offset,
     )
@@ -109,13 +120,14 @@ async def get_chat_history_by_conversation(
     user_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ConversationHistoryResponse:
     service = ChatService(db)
     return service.get_conversation_history(
-        session_id=session_id,
+        session_id=authenticated_session_id(current_user),
         conversation_id=conversation_id,
-        user_id=user_id,
+        user_id=current_user.id,
         limit=limit,
         offset=offset,
     )

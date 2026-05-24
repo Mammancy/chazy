@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -548,8 +549,11 @@ class ChatService:
     def _resolve_history_conversation(self, *, user: User, conversation_id: int | None = None) -> Conversation:
         if conversation_id is not None:
             conversation = self.db.get(Conversation, conversation_id)
-            if conversation is not None and conversation.user_id == user.id:
-                return conversation
+            if conversation is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+            if conversation.user_id != user.id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this conversation.")
+            return conversation
         conversation = self.db.scalar(
             select(Conversation)
             .where(Conversation.user_id == user.id, Conversation.status == "active")
@@ -572,8 +576,11 @@ class ChatService:
     def _resolve_conversation(self, *, payload: ChatRequest, user: User) -> Conversation:
         if payload.conversation_id is not None:
             conversation = self.db.get(Conversation, payload.conversation_id)
-            if conversation is not None and conversation.user_id == user.id:
-                return conversation
+            if conversation is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+            if conversation.user_id != user.id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this conversation.")
+            return conversation
         conversation = self.db.scalar(
             select(Conversation)
             .where(Conversation.user_id == user.id, Conversation.status == "active")

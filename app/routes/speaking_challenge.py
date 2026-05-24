@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
+from app.dependencies.auth import authenticated_session_id, get_current_user
+from app.models.user import User
 from app.schemas.speaking_challenge import (
     DailySpeakingChallengesResponse,
     SpeakingChallengeCompletionCreate,
@@ -20,11 +22,12 @@ async def get_daily_speaking_challenges(
     session_id: str = Query(..., min_length=1),
     user_id: int | None = Query(default=None, ge=1),
     challenge_date: date | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DailySpeakingChallengesResponse:
     return SpeakingChallengeService(db).get_daily_challenges(
-        session_id=session_id,
-        user_id=user_id,
+        session_id=authenticated_session_id(current_user),
+        user_id=current_user.id,
         challenge_date=challenge_date,
     )
 
@@ -34,12 +37,16 @@ async def complete_speaking_challenge(
     challenge_id: int,
     payload: SpeakingChallengeCompletionCreate,
     challenge_date: date | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SpeakingChallengeCompletionResponse:
     try:
+        secure_payload = payload.model_copy(
+            update={"session_id": authenticated_session_id(current_user), "user_id": current_user.id}
+        )
         return SpeakingChallengeService(db).complete_challenge(
             challenge_id=challenge_id,
-            payload=payload,
+            payload=secure_payload,
             challenge_date=challenge_date,
         )
     except ValueError as exc:
@@ -50,6 +57,10 @@ async def complete_speaking_challenge(
 async def get_speaking_challenge_streak(
     session_id: str = Query(..., min_length=1),
     user_id: int | None = Query(default=None, ge=1),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SpeakingChallengeStreakResponse:
-    return SpeakingChallengeService(db).get_streak(session_id=session_id, user_id=user_id)
+    return SpeakingChallengeService(db).get_streak(
+        session_id=authenticated_session_id(current_user),
+        user_id=current_user.id,
+    )

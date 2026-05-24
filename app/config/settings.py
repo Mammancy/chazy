@@ -46,6 +46,10 @@ class Settings(BaseModel):
     smtp_use_ssl: bool = Field(default=os.getenv("SMTP_USE_SSL", "false").lower() == "true")
     smtp_timeout_seconds: float = Field(default=_env_float("SMTP_TIMEOUT_SECONDS", 20.0))
     password_reset_base_url: str = Field(default=os.getenv("PASSWORD_RESET_BASE_URL", "https://example.com/reset-password"))
+    jwt_secret_key: str = Field(default=os.getenv("JWT_SECRET_KEY", "change-this-development-jwt-secret"))
+    jwt_access_token_minutes: int = Field(default=_env_int("JWT_ACCESS_TOKEN_MINUTES", 30))
+    jwt_refresh_token_days: int = Field(default=_env_int("JWT_REFRESH_TOKEN_DAYS", 30))
+    jwt_issuer: str = Field(default=os.getenv("JWT_ISSUER", "chazy-api"))
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             origin.strip()
