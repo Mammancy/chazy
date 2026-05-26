@@ -24,10 +24,23 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+DEFAULT_JWT_SECRET_KEY = "change-this-development-jwt-secret"
+WEAK_JWT_SECRET_VALUES = {
+    DEFAULT_JWT_SECRET_KEY,
+    "secret",
+    "jwt-secret",
+    "test-jwt-secret",
+    "development-jwt-secret",
+    "change-me",
+    "changeme",
+    "password",
+}
+
+
 class Settings(BaseModel):
     app_name: str = Field(default=os.getenv("APP_NAME", "Chazy"))
     app_version: str = Field(default=os.getenv("APP_VERSION", "0.1.0"))
-    environment: str = Field(default=os.getenv("ENVIRONMENT", "development"))
+    environment: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
     debug: bool = Field(default=os.getenv("DEBUG", "false").lower() == "true")
     log_level: str = Field(default=os.getenv("LOG_LEVEL", "INFO"))
     api_v1_prefix: str = Field(default=os.getenv("API_V1_PREFIX", "/api/v1"))
@@ -46,7 +59,7 @@ class Settings(BaseModel):
     smtp_use_ssl: bool = Field(default=os.getenv("SMTP_USE_SSL", "false").lower() == "true")
     smtp_timeout_seconds: float = Field(default=_env_float("SMTP_TIMEOUT_SECONDS", 20.0))
     password_reset_base_url: str = Field(default=os.getenv("PASSWORD_RESET_BASE_URL", "https://example.com/reset-password"))
-    jwt_secret_key: str = Field(default=os.getenv("JWT_SECRET_KEY", "change-this-development-jwt-secret"))
+    jwt_secret_key: str = Field(default_factory=lambda: os.getenv("JWT_SECRET_KEY", DEFAULT_JWT_SECRET_KEY))
     jwt_access_token_minutes: int = Field(default=_env_int("JWT_ACCESS_TOKEN_MINUTES", 30))
     jwt_refresh_token_days: int = Field(default=_env_int("JWT_REFRESH_TOKEN_DAYS", 30))
     jwt_issuer: str = Field(default=os.getenv("JWT_ISSUER", "chazy-api"))
@@ -69,6 +82,32 @@ class Settings(BaseModel):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def validate_production_jwt_secret(settings: Settings | None = None) -> None:
+    active_settings = settings or get_settings()
+    environment = active_settings.environment.strip().lower()
+    if environment not in {"production", "prod"}:
+        return
+
+    secret = active_settings.jwt_secret_key.strip()
+    weak_reasons = []
+    if not secret:
+        weak_reasons.append("it is empty")
+    if secret in WEAK_JWT_SECRET_VALUES:
+        weak_reasons.append("it uses a known default or test value")
+    if len(secret) < 32:
+        weak_reasons.append("it is shorter than 32 characters")
+    lowered = secret.lower()
+    if any(marker in lowered for marker in ("change-this", "changeme", "development", "default")):
+        weak_reasons.append("it contains a placeholder marker")
+
+    if weak_reasons:
+        raise RuntimeError(
+            "Refusing to start in production because JWT_SECRET_KEY is weak: "
+            + "; ".join(dict.fromkeys(weak_reasons))
+            + ". Set JWT_SECRET_KEY to a unique high-entropy secret."
+        )
 
 
 

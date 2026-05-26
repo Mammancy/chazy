@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.config.settings import get_settings
+from app.config.settings import get_settings, validate_production_jwt_secret
 from app.ai.startup_validation import validate_openai_startup_configuration
 from app.database.session import close_db, init_db
 from app.middleware.admin_authorization import AdminAuthorizationMiddleware
@@ -17,6 +17,7 @@ from app.utils.logging import configure_logging
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_production_jwt_secret()
     await validate_openai_startup_configuration()
     await init_db()
     yield
