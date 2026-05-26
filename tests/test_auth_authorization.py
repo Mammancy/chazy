@@ -1,16 +1,18 @@
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.config.settings import get_settings
 from app.database.session import get_db
 from app.main import create_application
-from app.models import Base
+from app.models import Base, RefreshToken, User
+from app.services.auth_service import AuthService
 
 
 class AuthorizationBoundaryTests(unittest.TestCase):
@@ -31,7 +33,7 @@ class AuthorizationBoundaryTests(unittest.TestCase):
             f"sqlite:///{os.path.join(self.temp_dir.name, 'auth-test.db')}",
             connect_args={"check_same_thread": False},
         )
-        testing_session_local = sessionmaker(
+        self.SessionLocal = sessionmaker(
             autocommit=False,
             autoflush=False,
             bind=self.engine,
@@ -40,7 +42,7 @@ class AuthorizationBoundaryTests(unittest.TestCase):
         Base.metadata.create_all(bind=self.engine)
 
         def override_get_db():
-            db = testing_session_local()
+            db = self.SessionLocal()
             try:
                 yield db
             finally:
@@ -76,6 +78,75 @@ class AuthorizationBoundaryTests(unittest.TestCase):
         refresh = self.client.post("/api/v1/auth/refresh", json={"refresh_token": login_body["refresh_token"]})
         self.assertEqual(refresh.status_code, 200)
         self.assertTrue(refresh.json()["access_token"])
+        self.assertTrue(refresh.json()["refresh_token"])
+        self.assertNotEqual(refresh.json()["refresh_token"], login_body["refresh_token"])
+
+    def test_refresh_token_rotation_rejects_reuse_and_revokes_replacements(self):
+        auth = self._sign_up("rotation@example.com")
+        first_refresh_token = auth["refresh_token"]
+
+        first_rotation = self.client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": first_refresh_token},
+        )
+        self.assertEqual(first_rotation.status_code, 200, first_rotation.text)
+        second_refresh_token = first_rotation.json()["refresh_token"]
+        self.assertNotEqual(second_refresh_token, first_refresh_token)
+
+        reused = self.client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": first_refresh_token},
+        )
+        self.assertEqual(reused.status_code, 401)
+        self.assertEqual(reused.json()["detail"], "Refresh token reuse detected.")
+
+        revoked_replacement = self.client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": second_refresh_token},
+        )
+        self.assertEqual(revoked_replacement.status_code, 401)
+
+        with self.SessionLocal() as db:
+            records = db.scalars(select(RefreshToken).where(RefreshToken.user_id == auth["user"]["id"])).all()
+            self.assertGreaterEqual(len(records), 2)
+            self.assertTrue(all(record.revoked_at is not None for record in records))
+            self.assertTrue(any(record.reuse_detected_at is not None for record in records))
+
+    def test_password_reset_revokes_refresh_tokens(self):
+        auth = self._sign_up("reset@example.com")
+        reset_token = "reset-token-for-test"
+        with self.SessionLocal() as db:
+            user = db.scalar(select(User).where(User.email == "reset@example.com"))
+            user.password_reset_token_hash = AuthService._hash_reset_token(reset_token)
+            user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+            db.add(user)
+            db.commit()
+
+        reset = self.client.post(
+            "/api/v1/auth/reset-password",
+            json={"token": reset_token, "new_password": "new-secret123"},
+        )
+        self.assertEqual(reset.status_code, 200, reset.text)
+
+        rejected = self.client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": auth["refresh_token"]},
+        )
+        self.assertEqual(rejected.status_code, 401)
+
+    def test_account_deletion_revokes_refresh_tokens(self):
+        auth = self._sign_up("delete-me@example.com")
+        deleted = self.client.delete(
+            f"/api/v1/auth/profile/{auth['user']['id']}",
+            headers=self._auth_header(auth),
+        )
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+
+        rejected = self.client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": auth["refresh_token"]},
+        )
+        self.assertEqual(rejected.status_code, 401)
 
     def test_profile_requires_authentication_and_rejects_other_user(self):
         first = self._sign_up("first@example.com")

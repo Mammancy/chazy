@@ -15,6 +15,7 @@ from app.models.pronunciation import (
     PronunciationPracticeAttempt,
     PronunciationPracticeSession,
 )
+from app.models.refresh_token import RefreshToken
 from app.models.speaking_challenge import SpeakingChallenge, SpeakingChallengeCompletion
 from app.models.user import User
 from app.models.vocabulary_notebook import (
@@ -40,6 +41,7 @@ __all__ = [
     "PronunciationExercise",
     "PronunciationPracticeSession",
     "PronunciationPracticeAttempt",
+    "RefreshToken",
     "SpeakingChallenge",
     "SpeakingChallengeCompletion",
     "VocabularyNotebookEntry",

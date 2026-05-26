@@ -17,7 +17,8 @@ from app.schemas.user import (
     UserRead,
 )
 from app.services.auth_service import AuthService
-from app.services.token_service import TokenError, TokenService
+from app.services.refresh_token_service import RefreshTokenReuseError, RefreshTokenService
+from app.services.token_service import TokenError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -25,29 +26,23 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/signup", response_model=AuthResponse)
 def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)) -> AuthResponse:
     user = AuthService(db).sign_up(payload)
-    return _auth_response(user, "Account created successfully.")
+    return _auth_response(db, user, "Account created successfully.")
 
 
 @router.post("/signin", response_model=AuthResponse)
 def sign_in(payload: SignInRequest, db: Session = Depends(get_db)) -> AuthResponse:
     user = AuthService(db).sign_in(payload)
-    return _auth_response(user, "Signed in successfully.")
+    return _auth_response(db, user, "Signed in successfully.")
 
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> TokenResponse:
     try:
-        user_id = TokenService.decode_refresh_token(payload.refresh_token)
+        tokens = RefreshTokenService(db).rotate(payload.refresh_token)
+    except RefreshTokenReuseError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token reuse detected.") from exc
     except TokenError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.") from exc
-
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive.")
-
-    tokens = TokenService.issue_pair(user)
     return TokenResponse(**tokens.__dict__)
 
 
@@ -97,8 +92,8 @@ def delete_profile(
     return BasicResponse(success=True, message="Account deleted successfully.")
 
 
-def _auth_response(user: User, message: str) -> AuthResponse:
-    tokens = TokenService.issue_pair(user)
+def _auth_response(db: Session, user: User, message: str) -> AuthResponse:
+    tokens = RefreshTokenService(db).issue_pair(user)
     return AuthResponse(
         success=True,
         message=message,

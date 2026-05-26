@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -52,6 +53,10 @@ class TokenService:
         return int(cls._decode_payload(token, expected_type="refresh")["sub"])
 
     @classmethod
+    def decode_refresh_claims(cls, token: str) -> dict[str, Any]:
+        return cls._decode_payload(token, expected_type="refresh")
+
+    @classmethod
     def _encode(cls, *, user: User, token_type: str, ttl_seconds: int) -> str:
         settings = get_settings()
         now = int(time.time())
@@ -62,6 +67,7 @@ class TokenService:
             "typ": token_type,
             "iat": now,
             "exp": now + ttl_seconds,
+            "jti": secrets.token_urlsafe(18),
             "email": user.email,
             "role": user.role,
         }

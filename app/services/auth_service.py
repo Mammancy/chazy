@@ -17,6 +17,7 @@ from app.config.settings import get_settings
 from app.models.user import User
 from app.schemas.user import ForgotPasswordRequest, ResetPasswordRequest, SignInRequest, SignUpRequest
 from app.services.email_service import EmailConfigurationError, EmailService
+from app.services.refresh_token_service import RefreshTokenService
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,7 @@ class AuthService:
         user.password_reset_expires_at = None
         user.is_active = False
         self.db.add(user)
+        RefreshTokenService(self.db).revoke_all_for_user(user_id, commit=False)
         self.db.commit()
 
     def forgot_password(self, payload: ForgotPasswordRequest) -> None:
@@ -161,6 +163,7 @@ class AuthService:
         user.password_reset_token_hash = None
         user.password_reset_expires_at = None
         self.db.add(user)
+        RefreshTokenService(self.db).revoke_all_for_user(user.id, commit=False)
         self.db.commit()
 
     def _build_reset_link(self, token: str) -> str:
