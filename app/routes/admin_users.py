@@ -5,6 +5,7 @@ from app.database.session import get_db
 from app.dependencies.admin_auth import get_admin_user, require_admin_csrf
 from app.models.user import User
 from app.schemas.admin_users import (
+    AdminCreateRequest,
     AdminUserListResponse,
     AdminUserProfileResponse,
     AdminUserStatusResponse,
@@ -26,6 +27,26 @@ async def list_admin_users(
     db: Session = Depends(get_db),
 ) -> AdminUserListResponse:
     return AdminUserService(db).list_users(search=search, status=status, limit=limit, offset=offset)
+
+
+@router.post("/admins", response_model=AdminUserStatusResponse)
+async def create_admin_user(
+    payload: AdminCreateRequest,
+    request: Request,
+    current_admin: User = Depends(get_admin_user),
+    csrf: None = Depends(require_admin_csrf),
+    db: Session = Depends(get_db),
+) -> AdminUserStatusResponse:
+    result = AdminUserService(db).create_admin(payload)
+    AdminAuditService(db).log(
+        admin_user=current_admin,
+        action="admin_user_created",
+        request=request,
+        target_type="user",
+        target_id=result.user.id,
+        metadata={"email": result.user.email, "role": "admin"},
+    )
+    return result
 
 
 @router.get("/{user_id}", response_model=AdminUserProfileResponse)

@@ -7,12 +7,14 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
 from app.schemas.admin_users import (
+    AdminCreateRequest,
     AdminUserActivityResponse,
     AdminUserListResponse,
     AdminUserProfileResponse,
     AdminUserStatusResponse,
     AdminUserSummaryResponse,
 )
+from app.services.auth_service import AuthService
 
 
 class AdminUserService:
@@ -92,6 +94,14 @@ class AdminUserService:
             success=True,
             message="User deleted successfully. The account was anonymized and deactivated.",
             user=summary,
+        )
+
+    def create_admin(self, payload: AdminCreateRequest) -> AdminUserStatusResponse:
+        user = AuthService(self.db).create_user(payload, role="admin")
+        return AdminUserStatusResponse(
+            success=True,
+            message="Administrator created successfully.",
+            user=self._summary(user),
         )
 
     def _summary(self, user: User) -> AdminUserSummaryResponse:

@@ -31,9 +31,50 @@ async def admin_home(current_admin: User = Depends(get_admin_user)) -> RedirectR
     return RedirectResponse(url="/admin/dashboard")
 
 
-@router.get("/admin/login", response_class=HTMLResponse, include_in_schema=False)
-async def admin_login_form(request: Request) -> HTMLResponse:
+@router.get("/admin/login", response_class=HTMLResponse, include_in_schema=False, response_model=None)
+async def admin_login_form(request: Request, db: Session = Depends(get_db)) -> HTMLResponse | RedirectResponse:
+    if not AuthService(db).admin_exists():
+        return RedirectResponse(url="/admin/setup", status_code=status.HTTP_303_SEE_OTHER)
     return _login_response(request)
+
+
+@router.get("/admin/setup", response_class=HTMLResponse, include_in_schema=False, response_model=None)
+async def admin_setup_form(request: Request, db: Session = Depends(get_db)) -> HTMLResponse | RedirectResponse:
+    if AuthService(db).admin_exists():
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(
+        request,
+        "admin/setup.html",
+        {"app_name": "Chazy", "error": None},
+    )
+
+
+@router.post("/admin/setup", include_in_schema=False, response_model=None)
+async def admin_setup(request: Request, db: Session = Depends(get_db)) -> RedirectResponse | HTMLResponse:
+    auth_service = AuthService(db)
+    if auth_service.admin_exists():
+        return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    body = (await request.body()).decode("utf-8")
+    fields = parse_qs(body)
+    try:
+        user = auth_service.create_first_admin(_signup_from_fields(fields))
+    except HTTPException as exc:
+        AdminAuditService(db).log(admin_user=None, action="admin_setup_failed", request=request, detail=str(exc.detail))
+        return templates.TemplateResponse(
+            request,
+            "admin/setup.html",
+            {"app_name": "Chazy", "error": str(exc.detail)},
+            status_code=exc.status_code,
+        )
+
+    tokens = TokenService.issue_pair(user)
+    csrf_token = new_csrf_token()
+    response = RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(ADMIN_ACCESS_COOKIE, tokens.access_token, httponly=True, secure=False, samesite="lax", max_age=tokens.expires_in)
+    response.set_cookie(ADMIN_CSRF_COOKIE, csrf_token, httponly=False, secure=False, samesite="lax", max_age=tokens.expires_in)
+    AdminAuditService(db).log(admin_user=user, action="admin_setup_completed", request=request)
+    return response
 
 
 @router.post("/admin/login", include_in_schema=False, response_model=None)
@@ -160,4 +201,17 @@ def _login_response(request: Request, error: str | None = None, status_code: int
         "admin/login.html",
         {"app_name": "Chazy", "error": error},
         status_code=status_code,
+    )
+
+
+def _signup_from_fields(fields: dict[str, list[str]]):
+    from app.schemas.user import SignUpRequest
+
+    return SignUpRequest(
+        full_name=(fields.get("full_name") or [""])[0],
+        email=(fields.get("email") or [""])[0],
+        phone_number=(fields.get("phone_number") or [""])[0],
+        country=(fields.get("country") or [""])[0],
+        state=(fields.get("state") or [""])[0],
+        password=(fields.get("password") or [""])[0],
     )

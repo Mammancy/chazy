@@ -10,7 +10,7 @@ from app.services.token_service import TokenError, TokenService
 class AdminAuthorizationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
-        if not self._is_admin_path(path) or path == "/admin/login":
+        if not self._is_admin_path(path) or path in {"/admin/login", "/admin/setup"}:
             return await call_next(request)
 
         error_status = self._authorize_request(request)

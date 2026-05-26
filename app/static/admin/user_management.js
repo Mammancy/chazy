@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("activateButton").addEventListener("click", () => updateStatus(true));
     document.getElementById("deactivateButton").addEventListener("click", () => updateStatus(false));
     document.getElementById("deleteButton").addEventListener("click", deleteSelectedUser);
+    document.getElementById("createAdminForm").addEventListener("submit", createAdmin);
     loadUsers();
 });
 
@@ -165,6 +166,36 @@ async function deleteSelectedUser() {
         await loadUsers();
     } catch (error) {
         showError(error.message || "Unable to delete user.");
+    }
+}
+
+async function createAdmin(event) {
+    event.preventDefault();
+    hideAlerts();
+    const payload = {
+        full_name: document.getElementById("adminFullName").value.trim(),
+        email: document.getElementById("adminEmail").value.trim(),
+        phone_number: document.getElementById("adminPhone").value.trim(),
+        country: document.getElementById("adminCountry").value.trim(),
+        state: document.getElementById("adminState").value.trim(),
+        password: document.getElementById("adminPassword").value
+    };
+    try {
+        const response = await fetch(`${window.CHazyAdminConfig.usersEndpoint}/admins`, {
+            method: "POST",
+            headers: adminJsonHeaders(),
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const detail = await response.json().catch(() => ({}));
+            throw new Error(detail.detail || `Admin creation returned HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        document.getElementById("createAdminForm").reset();
+        showSuccess(data.message || "Administrator created.");
+        await loadUsers();
+    } catch (error) {
+        showError(error.message || "Unable to create administrator.");
     }
 }
 

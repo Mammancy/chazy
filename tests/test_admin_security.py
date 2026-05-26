@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.database.session import get_db
 from app.main import create_application
-from app.models import AdminAuditLog, Base
+from app.models import AdminAuditLog, Base, User
 
 
 class AdminSecurityTests(unittest.TestCase):
@@ -55,6 +55,36 @@ class AdminSecurityTests(unittest.TestCase):
         response = self.client.get("/admin/dashboard", follow_redirects=False)
         self.assertEqual(response.status_code, 303)
         self.assertEqual(response.headers["location"], "/admin/login")
+
+    def test_admin_login_redirects_to_setup_when_no_admin_exists(self):
+        response = self.client.get("/admin/login", follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/admin/setup")
+
+    def test_first_admin_setup_creates_admin_and_then_locks_setup(self):
+        setup = self.client.post(
+            "/admin/setup",
+            data={
+                "full_name": "First Admin",
+                "email": "first-admin@example.com",
+                "phone_number": "08000000000",
+                "country": "Nigeria",
+                "state": "Kano",
+                "password": "secret123",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(setup.status_code, 303)
+        self.assertEqual(setup.headers["location"], "/admin/dashboard")
+
+        blocked_get = self.client.get("/admin/setup", follow_redirects=False)
+        self.assertEqual(blocked_get.status_code, 303)
+        self.assertEqual(blocked_get.headers["location"], "/admin/login")
+
+        with self.SessionLocal() as db:
+            admin = db.scalar(select(User).where(User.email == "first-admin@example.com"))
+            self.assertIsNotNone(admin)
+            self.assertEqual(admin.role, "admin")
 
     def test_non_admin_cannot_access_admin_api(self):
         learner = self._sign_up("learner@example.com")
@@ -107,6 +137,38 @@ class AdminSecurityTests(unittest.TestCase):
             self.assertIsNotNone(audit_log)
             self.assertEqual(audit_log.admin_user_id, admin["user"]["id"])
             self.assertEqual(audit_log.target_id, learner["user"]["id"])
+
+    def test_existing_admin_can_create_additional_admin(self):
+        self._sign_up("admin@example.com")
+        login = self.client.post(
+            "/admin/login",
+            data={"email": "admin@example.com", "password": "secret123"},
+            follow_redirects=False,
+        )
+        self.assertEqual(login.status_code, 303)
+        csrf_token = self.client.cookies.get("chazy_admin_csrf")
+
+        response = self.client.post(
+            "/api/v1/admin/users/admins",
+            json={
+                "full_name": "Second Admin",
+                "email": "second-admin@example.com",
+                "phone_number": "08000000001",
+                "country": "Nigeria",
+                "state": "Lagos",
+                "password": "secret123",
+            },
+            headers={"X-CSRF-Token": csrf_token},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["user"]["email"], "second-admin@example.com")
+
+        login_second = self.client.post(
+            "/admin/login",
+            data={"email": "second-admin@example.com", "password": "secret123"},
+            follow_redirects=False,
+        )
+        self.assertEqual(login_second.status_code, 303)
 
     def _sign_up(self, email: str) -> dict:
         response = self.client.post(

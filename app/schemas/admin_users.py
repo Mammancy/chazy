@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.user import SignUpRequest
+
 
 class AdminUserSummaryResponse(BaseModel):
     id: int
@@ -46,3 +48,7 @@ class AdminUserStatusResponse(BaseModel):
     success: bool
     message: str
     user: AdminUserSummaryResponse
+
+
+class AdminCreateRequest(SignUpRequest):
+    pass

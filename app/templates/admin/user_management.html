@@ -83,6 +83,44 @@
             </div>
         </section>
 
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow mb-1">Administrator Access</p>
+                    <h2 class="h5 mb-0">Create administrator</h2>
+                </div>
+            </div>
+            <form id="createAdminForm" class="row g-3 align-items-end">
+                <div class="col-lg-3">
+                    <label class="form-label" for="adminFullName">Full name</label>
+                    <input class="form-control" id="adminFullName" type="text" autocomplete="name" required>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label" for="adminEmail">Email</label>
+                    <input class="form-control" id="adminEmail" type="email" autocomplete="username" required>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="adminPhone">Phone</label>
+                    <input class="form-control" id="adminPhone" type="tel" autocomplete="tel" required>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="adminCountry">Country</label>
+                    <input class="form-control" id="adminCountry" type="text" autocomplete="country-name" required>
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label" for="adminState">State</label>
+                    <input class="form-control" id="adminState" type="text" autocomplete="address-level1" required>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label" for="adminPassword">Temporary password</label>
+                    <input class="form-control" id="adminPassword" type="password" autocomplete="new-password" minlength="6" required>
+                </div>
+                <div class="col-lg-3">
+                    <button class="btn btn-primary w-100" type="submit">Create admin</button>
+                </div>
+            </form>
+        </section>
+
         <section class="user-management-grid">
             <div class="panel">
                 <div class="panel-header">

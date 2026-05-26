@@ -28,6 +28,11 @@ class AuthService:
 
     def sign_up(self, payload: SignUpRequest) -> User:
         email = payload.email.lower().strip()
+        role = "admin" if email in self.settings.admin_emails else "user"
+        return self.create_user(payload, role=role)
+
+    def create_user(self, payload: SignUpRequest, *, role: str = "user") -> User:
+        email = payload.email.lower().strip()
         existing = self.db.scalar(select(User).where(User.email == email).limit(1))
         if existing is not None:
             raise HTTPException(
@@ -44,13 +49,24 @@ class AuthService:
             state=payload.state.strip(),
             password_hash=self._hash_password(payload.password),
             timezone="Africa/Lagos",
-            role="admin" if email in self.settings.admin_emails else "user",
+            role=role,
             is_active=True,
         )
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
         return user
+
+    def admin_exists(self) -> bool:
+        return self.db.scalar(select(User.id).where(User.role == "admin").limit(1)) is not None
+
+    def create_first_admin(self, payload: SignUpRequest) -> User:
+        if self.admin_exists():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin setup is already complete.",
+            )
+        return self.create_user(payload, role="admin")
 
     def sign_in(self, payload: SignInRequest) -> User:
         email = payload.email.lower().strip()
