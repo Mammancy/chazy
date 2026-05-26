@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.speaking_challenge import SpeakingChallenge, SpeakingChallengeCompletion
 from app.schemas.speaking_challenge import (
     DailySpeakingChallengesResponse,
+    DailySpeakingStreakSyncCreate,
     SpeakingChallengeCompletionCreate,
     SpeakingChallengeCompletionResponse,
     SpeakingChallengeResponse,
@@ -186,6 +187,13 @@ class SpeakingChallengeService:
             completed_today=active_today in completed_set,
             last_completed_date=max(completed_set) if completed_set else None,
         )
+
+    def sync_daily_speaking_streak(self, payload: DailySpeakingStreakSyncCreate) -> None:
+        # Android can count chat-message speaking practice before the backend has
+        # a dedicated daily streak table. Accept the sync payload so clients can
+        # safely flush their offline queue; challenge-derived streaks still come
+        # from SpeakingChallengeCompletion records.
+        return None
 
     def _select_daily_challenges(self, challenge_date: date) -> list[SpeakingChallenge]:
         rows = self.db.query(SpeakingChallenge).order_by(SpeakingChallenge.id).all()

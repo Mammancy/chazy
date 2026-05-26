@@ -8,10 +8,12 @@ from app.dependencies.auth import authenticated_session_id, get_current_user
 from app.models.user import User
 from app.schemas.speaking_challenge import (
     DailySpeakingChallengesResponse,
+    DailySpeakingStreakSyncCreate,
     SpeakingChallengeCompletionCreate,
     SpeakingChallengeCompletionResponse,
     SpeakingChallengeStreakResponse,
 )
+from app.schemas.user import BasicResponse
 from app.services.speaking_challenge_service import SpeakingChallengeService
 
 router = APIRouter(prefix="/speaking-challenges", tags=["speaking-challenges"])
@@ -64,3 +66,16 @@ async def get_speaking_challenge_streak(
         session_id=authenticated_session_id(current_user),
         user_id=current_user.id,
     )
+
+
+@router.post("/streak/sync", response_model=BasicResponse)
+async def sync_daily_speaking_streak(
+    payload: DailySpeakingStreakSyncCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BasicResponse:
+    secure_payload = payload.model_copy(
+        update={"session_id": authenticated_session_id(current_user), "user_id": current_user.id}
+    )
+    SpeakingChallengeService(db).sync_daily_speaking_streak(secure_payload)
+    return BasicResponse(success=True, message="Daily speaking streak synced.")

@@ -45,3 +45,13 @@ class SpeakingChallengeStreakResponse(BaseModel):
     longest_streak: int
     completed_today: bool
     last_completed_date: date | None = None
+
+
+class DailySpeakingStreakSyncCreate(BaseModel):
+    session_id: str = Field(..., min_length=1)
+    user_id: int | None = Field(default=None, ge=1)
+    current_streak: int = Field(default=0, ge=0)
+    longest_streak: int = Field(default=0, ge=0)
+    last_activity_date: date | None = None
+    source: str = Field(default="android")
+    awarded_badges: list[int] = Field(default_factory=list)
