@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config.settings import get_settings
 from app.database.session import get_db
 from app.main import create_application
-from app.models import Base, RefreshToken, User
+from app.models import Base, PronunciationExercise, RefreshToken, User
 from app.services.auth_service import AuthService
 
 
@@ -222,11 +222,104 @@ class AuthorizationBoundaryTests(unittest.TestCase):
             ("get", "/api/v1/speaking-challenges/daily", {"params": {"session_id": "x"}}),
             ("get", "/api/v1/learning-analytics/", {"params": {"session_id": "x"}}),
             ("get", "/api/v1/fluency-dashboard/", {"params": {"session_id": "x"}}),
+            ("get", "/api/v1/pronunciation/words", {}),
+            ("get", "/api/v1/pronunciation/progress", {"params": {"session_id": "x"}}),
+            ("get", "/api/v1/achievements/", {"params": {"session_id": "x"}}),
+            ("get", "/api/v1/conversation-scenarios/", {}),
+            ("post", "/api/v1/placement-assessment/start", {"json": {"session_id": "x", "user_id": 1}}),
         ]
         for method, path, kwargs in cases:
             with self.subTest(path=path):
                 response = getattr(self.client, method)(path, **kwargs)
                 self.assertEqual(response.status_code, 401)
+
+    def test_pronunciation_uses_authenticated_identity_and_blocks_cross_user_attempts(self):
+        first = self._sign_up("pronunciation-first@example.com")
+        second = self._sign_up("pronunciation-second@example.com")
+        self._seed_pronunciation_exercise()
+
+        created = self.client.post(
+            "/api/v1/pronunciation/sessions",
+            json={"session_id": "spoofed-session", "user_id": first["user"]["id"], "limit": 1},
+            headers=self._auth_header(second),
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        session = created.json()
+        self.assertEqual(session["user_id"], second["user"]["id"])
+        self.assertEqual(session["session_id"], f"chazy-user-{second['user']['id']}")
+
+        forbidden = self.client.post(
+            f"/api/v1/pronunciation/sessions/{session['practice_session_id']}/attempts",
+            json={"exercise_id": 1, "duration_ms": 1000},
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+    def test_achievements_ignore_spoofed_identity(self):
+        first = self._sign_up("achievement-first@example.com")
+        second = self._sign_up("achievement-second@example.com")
+
+        response = self.client.get(
+            "/api/v1/achievements/",
+            params={"session_id": "spoofed-session", "user_id": first["user"]["id"]},
+            headers=self._auth_header(second),
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["user_id"], second["user"]["id"])
+        self.assertEqual(body["session_id"], f"chazy-user-{second['user']['id']}")
+
+    def test_placement_assessment_uses_authenticated_identity_and_blocks_cross_user_access(self):
+        first = self._sign_up("placement-first@example.com")
+        second = self._sign_up("placement-second@example.com")
+
+        created = self.client.post(
+            "/api/v1/placement-assessment/start",
+            json={"session_id": "spoofed-session", "user_id": first["user"]["id"]},
+            headers=self._auth_header(second),
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        assessment = created.json()
+        self.assertEqual(assessment["user_id"], second["user"]["id"])
+        self.assertEqual(assessment["session_id"], f"chazy-user-{second['user']['id']}")
+
+        forbidden_state = self.client.get(
+            f"/api/v1/placement-assessment/{assessment['assessment_session_id']}",
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(forbidden_state.status_code, 403)
+
+        forbidden_answer = self.client.post(
+            f"/api/v1/placement-assessment/{assessment['assessment_session_id']}/answers",
+            json={"question_id": "grammar_1", "answer": "B"},
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(forbidden_answer.status_code, 403)
+
+    def test_conversation_scenario_uses_authenticated_identity_and_blocks_cross_user_turns(self):
+        first = self._sign_up("scenario-first@example.com")
+        second = self._sign_up("scenario-second@example.com")
+
+        created = self.client.post(
+            "/api/v1/conversation-scenarios/sessions",
+            json={
+                "session_id": "spoofed-session",
+                "user_id": first["user"]["id"],
+                "scenario_key": "job_interview",
+            },
+            headers=self._auth_header(second),
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        scenario = created.json()
+        self.assertEqual(scenario["user_id"], second["user"]["id"])
+        self.assertEqual(scenario["session_id"], f"chazy-user-{second['user']['id']}")
+
+        forbidden = self.client.post(
+            f"/api/v1/conversation-scenarios/sessions/{scenario['scenario_session_id']}/turns",
+            json={"message": "I have experience in customer support."},
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(forbidden.status_code, 403)
 
     def _sign_up(self, email: str) -> dict:
         response = self.client.post(
@@ -246,6 +339,19 @@ class AuthorizationBoundaryTests(unittest.TestCase):
     @staticmethod
     def _auth_header(auth_body: dict) -> dict[str, str]:
         return {"Authorization": f"Bearer {auth_body['access_token']}"}
+
+    def _seed_pronunciation_exercise(self) -> None:
+        with self.SessionLocal() as db:
+            db.add(
+                PronunciationExercise(
+                    word="thought",
+                    phonetic_spelling="thawt",
+                    difficulty="beginner",
+                    example_sentences=["I thought about it."],
+                    pronunciation_tips=["Practice the th sound."],
+                )
+            )
+            db.commit()
 
 
 if __name__ == "__main__":

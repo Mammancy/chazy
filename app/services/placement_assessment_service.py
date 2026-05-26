@@ -73,10 +73,12 @@ class PlacementAssessmentService:
         self,
         assessment_session_id: int,
         payload: PlacementAnswerSubmitRequest,
+        user_id: int | None = None,
     ) -> PlacementAnswerFeedbackResponse:
         session = self.db.get(PlacementAssessmentSession, assessment_session_id)
         if session is None:
             raise ValueError("Placement assessment session not found.")
+        self._authorize_session(session, user_id)
         if session.status == "completed":
             raise ValueError("Placement assessment is already completed.")
         question = self._question(payload.question_id)
@@ -110,11 +112,12 @@ class PlacementAssessmentService:
             completed=completed,
         )
 
-    def state(self, assessment_session_id: int) -> PlacementAssessmentStateResponse:
+    def state(self, assessment_session_id: int, user_id: int | None = None) -> PlacementAssessmentStateResponse:
         session = self.db.get(PlacementAssessmentSession, assessment_session_id)
         if session is None:
             raise ValueError("Placement assessment session not found.")
-        result = self.result(assessment_session_id) if session.status == "completed" else None
+        self._authorize_session(session, user_id)
+        result = self.result(assessment_session_id, user_id=user_id) if session.status == "completed" else None
         next_question = None
         if session.status != "completed" and session.current_step < len(QUESTIONS):
             next_question = self._question_response(QUESTIONS[session.current_step])
@@ -128,10 +131,11 @@ class PlacementAssessmentService:
             result=result,
         )
 
-    def result(self, assessment_session_id: int) -> PlacementAssessmentResultResponse:
+    def result(self, assessment_session_id: int, user_id: int | None = None) -> PlacementAssessmentResultResponse:
         session = self.db.get(PlacementAssessmentSession, assessment_session_id)
         if session is None:
             raise ValueError("Placement assessment session not found.")
+        self._authorize_session(session, user_id)
         if session.status != "completed":
             self._complete(session)
             self.db.commit()
@@ -146,6 +150,11 @@ class PlacementAssessmentService:
             learning_plan=PlacementLearningPlanResponse(**(session.learning_plan or self._learning_plan("beginner", {}))),
             completed_at=session.completed_at,
         )
+
+    @staticmethod
+    def _authorize_session(session: PlacementAssessmentSession, user_id: int | None) -> None:
+        if user_id is not None and session.user_id != user_id:
+            raise PermissionError("Not authorized for this placement assessment.")
 
     def _complete(self, session: PlacementAssessmentSession) -> None:
         answers = list(

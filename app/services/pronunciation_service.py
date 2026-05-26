@@ -100,10 +100,13 @@ class PronunciationService:
         self,
         practice_session_id: int,
         payload: PronunciationAttemptCreate,
+        user_id: int | None = None,
     ) -> PronunciationAttemptResponse:
         practice_session = self.db.get(PronunciationPracticeSession, practice_session_id)
         if practice_session is None:
             raise ValueError("Pronunciation practice session not found.")
+        if user_id is not None and practice_session.user_id != user_id:
+            raise PermissionError("Not authorized for this pronunciation session.")
 
         exercise = self.db.get(PronunciationExercise, payload.exercise_id)
         if exercise is None:

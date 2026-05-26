@@ -140,10 +140,17 @@ class ConversationScenarioService:
         self.db.refresh(scenario_session)
         return self._session_response(scenario_session, template)
 
-    def respond(self, scenario_session_id: int, payload: ScenarioTurnRequest) -> ScenarioTurnResponse:
+    def respond(
+        self,
+        scenario_session_id: int,
+        payload: ScenarioTurnRequest,
+        user_id: int | None = None,
+    ) -> ScenarioTurnResponse:
         scenario_session = self.db.get(ConversationScenarioSession, scenario_session_id)
         if scenario_session is None:
             raise ValueError("Conversation scenario session not found.")
+        if user_id is not None and scenario_session.user_id != user_id:
+            raise PermissionError("Not authorized for this conversation scenario session.")
         template = self._template(scenario_session.scenario_key)
         step_number = scenario_session.current_step + 1
         feedback = self._feedback(payload.message, scenario_session.difficulty)
@@ -224,6 +231,7 @@ class ConversationScenarioService:
                 user_message_id=user_message_id,
                 assistant_message_id=assistant_message_id,
             ),
+            user_id=user_id,
         )
 
     def adapt_difficulty(self, *, session_id: str, user_id: int | None = None) -> str:
