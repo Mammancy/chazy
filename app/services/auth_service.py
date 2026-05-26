@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import get_settings
 from app.models.user import User
 from app.schemas.user import ForgotPasswordRequest, ResetPasswordRequest, SignInRequest, SignUpRequest
-from app.services.email_service import EmailConfigurationError, EmailService
+from app.services.email_service import EmailConfigurationError, EmailDeliveryError, EmailService
 from app.services.refresh_token_service import RefreshTokenService
 
 logger = logging.getLogger(__name__)
@@ -134,18 +134,17 @@ class AuthService:
         self.db.commit()
 
         reset_link = self._build_reset_link(reset_token)
+        email_service = EmailService()
         try:
-            EmailService().send_password_reset_email(
+            email_service.send_password_reset_email(
                 recipient=email,
                 reset_link=reset_link,
                 reset_code=reset_token,
             )
         except EmailConfigurationError as exc:
-            logger.exception("password_reset email configuration error user_id=%s", user.id)
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-        except Exception as exc:
-            logger.exception("password_reset email send failed user_id=%s", user.id)
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to send password reset email.") from exc
+            logger.error("password_reset email configuration error user_id=%s error=%s", user.id, exc)
+        except EmailDeliveryError:
+            logger.exception("password_reset email delivery failed user_id=%s", user.id)
 
     def reset_password(self, payload: ResetPasswordRequest) -> None:
         token_hash = self._hash_reset_token(payload.token)
@@ -165,6 +164,14 @@ class AuthService:
         self.db.add(user)
         RefreshTokenService(self.db).revoke_all_for_user(user.id, commit=False)
         self.db.commit()
+
+        if user.email:
+            try:
+                EmailService().send_password_reset_success_email(recipient=user.email)
+            except EmailConfigurationError as exc:
+                logger.error("password_reset_success email configuration error user_id=%s error=%s", user.id, exc)
+            except EmailDeliveryError:
+                logger.exception("password_reset_success email delivery failed user_id=%s", user.id)
 
     def _build_reset_link(self, token: str) -> str:
         separator = "&" if "?" in self.settings.password_reset_base_url else "?"

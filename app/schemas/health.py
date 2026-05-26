@@ -6,4 +6,4 @@ class HealthResponse(BaseModel):
     service: str
     environment: str
     version: str
-
+    email: dict | None = None

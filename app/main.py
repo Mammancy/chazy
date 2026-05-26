@@ -12,12 +12,14 @@ from app.middleware.admin_authorization import AdminAuthorizationMiddleware
 from app.routes.admin_dashboard import router as admin_dashboard_router
 from app.routes.openai_diagnostic import router as openai_diagnostic_router
 from app.routes.router import api_router
+from app.services.startup_validation import validate_smtp_startup_configuration
 from app.utils.logging import configure_logging
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_jwt_secret()
+    validate_smtp_startup_configuration()
     await validate_openai_startup_configuration()
     await init_db()
     yield
