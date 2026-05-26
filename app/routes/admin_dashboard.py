@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
+from app.config.settings import get_settings
 from app.database.session import get_db
 from app.dependencies.admin_auth import ADMIN_ACCESS_COOKIE, ADMIN_CSRF_COOKIE, get_admin_user, new_csrf_token
 from app.models.user import User
@@ -71,8 +72,7 @@ async def admin_setup(request: Request, db: Session = Depends(get_db)) -> Redire
     tokens = TokenService.issue_pair(user)
     csrf_token = new_csrf_token()
     response = RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(ADMIN_ACCESS_COOKIE, tokens.access_token, httponly=True, secure=False, samesite="lax", max_age=tokens.expires_in)
-    response.set_cookie(ADMIN_CSRF_COOKIE, csrf_token, httponly=False, secure=False, samesite="lax", max_age=tokens.expires_in)
+    _set_admin_cookies(request, response, access_token=tokens.access_token, csrf_token=csrf_token, max_age=tokens.expires_in)
     AdminAuditService(db).log(admin_user=user, action="admin_setup_completed", request=request)
     return response
 
@@ -102,8 +102,7 @@ async def admin_login(request: Request, db: Session = Depends(get_db)) -> Redire
     tokens = TokenService.issue_pair(user)
     csrf_token = new_csrf_token()
     response = RedirectResponse(url="/admin/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(ADMIN_ACCESS_COOKIE, tokens.access_token, httponly=True, secure=False, samesite="lax", max_age=tokens.expires_in)
-    response.set_cookie(ADMIN_CSRF_COOKIE, csrf_token, httponly=False, secure=False, samesite="lax", max_age=tokens.expires_in)
+    _set_admin_cookies(request, response, access_token=tokens.access_token, csrf_token=csrf_token, max_age=tokens.expires_in)
     AdminAuditService(db).log(admin_user=user, action="admin_login_success", request=request)
     return response
 
@@ -116,8 +115,9 @@ async def admin_logout(
 ) -> RedirectResponse:
     AdminAuditService(db).log(admin_user=current_admin, action="admin_logout", request=request)
     response = RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
-    response.delete_cookie(ADMIN_ACCESS_COOKIE)
-    response.delete_cookie(ADMIN_CSRF_COOKIE)
+    secure = _admin_cookie_secure(request)
+    response.delete_cookie(ADMIN_ACCESS_COOKIE, secure=secure, samesite="lax")
+    response.delete_cookie(ADMIN_CSRF_COOKIE, secure=secure, samesite="lax")
     return response
 
 
@@ -202,6 +202,47 @@ def _login_response(request: Request, error: str | None = None, status_code: int
         {"app_name": "Chazy", "error": error},
         status_code=status_code,
     )
+
+
+def _set_admin_cookies(
+    request: Request,
+    response: RedirectResponse,
+    *,
+    access_token: str,
+    csrf_token: str,
+    max_age: int,
+) -> None:
+    secure = _admin_cookie_secure(request)
+    response.set_cookie(
+        ADMIN_ACCESS_COOKIE,
+        access_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        max_age=max_age,
+    )
+    response.set_cookie(
+        ADMIN_CSRF_COOKIE,
+        csrf_token,
+        httponly=False,
+        secure=secure,
+        samesite="lax",
+        max_age=max_age,
+    )
+
+
+def _admin_cookie_secure(request: Request) -> bool:
+    settings = get_settings()
+    environment = settings.environment.strip().lower()
+    if environment in {"production", "prod"}:
+        return True
+    if request.url.scheme == "https":
+        return True
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    if forwarded_proto.split(",", 1)[0].strip().lower() == "https":
+        return True
+    forwarded = request.headers.get("forwarded", "").lower()
+    return "proto=https" in forwarded
 
 
 def _signup_from_fields(fields: dict[str, list[str]]):

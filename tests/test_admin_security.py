@@ -138,6 +138,58 @@ class AdminSecurityTests(unittest.TestCase):
             self.assertEqual(audit_log.admin_user_id, admin["user"]["id"])
             self.assertEqual(audit_log.target_id, learner["user"]["id"])
 
+    def test_admin_login_uses_local_http_cookies_without_secure_flag(self):
+        self._sign_up("admin@example.com")
+        response = self.client.post(
+            "/admin/login",
+            data={"email": "admin@example.com", "password": "secret123"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        admin_cookies = [header for header in set_cookie_headers if "chazy_admin_" in header]
+        self.assertEqual(len(admin_cookies), 2)
+        self.assertTrue(all("secure" not in header.lower() for header in admin_cookies))
+
+    def test_admin_login_uses_secure_cookies_for_https_request(self):
+        self._sign_up("admin@example.com")
+        response = self.client.post(
+            "https://testserver/admin/login",
+            data={"email": "admin@example.com", "password": "secret123"},
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        admin_cookies = [header for header in set_cookie_headers if "chazy_admin_" in header]
+        self.assertEqual(len(admin_cookies), 2)
+        self.assertTrue(all("secure" in header.lower() for header in admin_cookies))
+
+    def test_admin_login_uses_secure_cookies_in_production(self):
+        self._sign_up("admin@example.com")
+        with patch.dict(
+            os.environ,
+            {
+                "ENVIRONMENT": "production",
+                "JWT_SECRET_KEY": "a-unique-production-secret-with-48-characters!!",
+                "ADMIN_EMAILS": "admin@example.com",
+            },
+        ):
+            get_settings.cache_clear()
+            response = self.client.post(
+                "/admin/login",
+                data={"email": "admin@example.com", "password": "secret123"},
+                follow_redirects=False,
+            )
+        get_settings.cache_clear()
+        self.assertEqual(response.status_code, 303)
+
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        admin_cookies = [header for header in set_cookie_headers if "chazy_admin_" in header]
+        self.assertEqual(len(admin_cookies), 2)
+        self.assertTrue(all("secure" in header.lower() for header in admin_cookies))
+
     def test_existing_admin_can_create_additional_admin(self):
         self._sign_up("admin@example.com")
         login = self.client.post(
