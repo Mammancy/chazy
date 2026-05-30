@@ -8,6 +8,7 @@ from app.schemas.user import (
     AuthResponse,
     BasicResponse,
     ForgotPasswordRequest,
+    ProfileUpdateRequest,
     RefreshTokenRequest,
     ResetPasswordRequest,
     ResponseLengthPreferenceUpdate,
@@ -78,6 +79,18 @@ def update_response_length_preference(
 ) -> UserRead:
     require_self(user_id, current_user)
     user = AuthService(db).update_response_length_preference(user_id, payload.response_length_preference)
+    return UserRead.model_validate(user)
+
+
+@router.patch("/profile/{user_id}", response_model=UserRead)
+def update_profile(
+    user_id: int,
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserRead:
+    require_self(user_id, current_user)
+    user = AuthService(db).update_profile(user_id, payload)
     return UserRead.model_validate(user)
 
 

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
 from app.models.user import User
-from app.schemas.user import ForgotPasswordRequest, ResetPasswordRequest, SignInRequest, SignUpRequest
+from app.schemas.user import ForgotPasswordRequest, ProfileUpdateRequest, ResetPasswordRequest, SignInRequest, SignUpRequest
 from app.services.email_service import EmailConfigurationError, EmailDeliveryError, EmailService
 from app.services.refresh_token_service import RefreshTokenService
 
@@ -101,6 +101,24 @@ class AuthService:
         self.db.refresh(user)
         return user
 
+    def update_profile(self, user_id: int, payload: ProfileUpdateRequest) -> User:
+        user = self.get_profile(user_id)
+        if payload.full_name is not None:
+            user.full_name = payload.full_name.strip()
+        if payload.bio is not None:
+            user.bio = payload.bio.strip()
+        if payload.learning_goal is not None:
+            user.learning_goal = payload.learning_goal.strip()
+        if payload.response_length_preference is not None:
+            normalized = payload.response_length_preference.upper()
+            if normalized not in {"SHORT", "MEDIUM", "DETAILED"}:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid response length preference.")
+            user.response_length_preference = normalized
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
     def delete_account(self, user_id: int) -> None:
         user = self.db.get(User, user_id)
         if user is None:
@@ -112,6 +130,8 @@ class AuthService:
         user.phone_number = None
         user.country = None
         user.state = None
+        user.bio = None
+        user.learning_goal = None
         user.password_hash = None
         user.password_reset_token_hash = None
         user.password_reset_expires_at = None

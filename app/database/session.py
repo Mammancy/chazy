@@ -77,6 +77,8 @@ def _upgrade_sqlite_schema() -> None:
                 "phone_number": "ALTER TABLE users ADD COLUMN phone_number VARCHAR(32)",
                 "country": "ALTER TABLE users ADD COLUMN country VARCHAR(100)",
                 "state": "ALTER TABLE users ADD COLUMN state VARCHAR(100)",
+                "bio": "ALTER TABLE users ADD COLUMN bio TEXT",
+                "learning_goal": "ALTER TABLE users ADD COLUMN learning_goal TEXT",
                 "password_hash": "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)",
                 "password_reset_token_hash": "ALTER TABLE users ADD COLUMN password_reset_token_hash VARCHAR(255)",
                 "password_reset_expires_at": "ALTER TABLE users ADD COLUMN password_reset_expires_at DATETIME",

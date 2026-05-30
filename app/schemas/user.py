@@ -13,6 +13,8 @@ class UserBase(BaseModel):
     phone_number: str | None = Field(default=None, max_length=32)
     country: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=100)
+    bio: str | None = Field(default=None, max_length=1000)
+    learning_goal: str | None = Field(default=None, max_length=1000)
     timezone: str = Field(default="Africa/Lagos", max_length=64)
     response_length_preference: ResponseLengthPreference = "SHORT"
     role: str = Field(default="user", max_length=32)
@@ -30,6 +32,8 @@ class UserUpdate(BaseModel):
     phone_number: str | None = Field(default=None, max_length=32)
     country: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=100)
+    bio: str | None = Field(default=None, max_length=1000)
+    learning_goal: str | None = Field(default=None, max_length=1000)
     timezone: str | None = Field(default=None, max_length=64)
     response_length_preference: ResponseLengthPreference | None = None
     role: str | None = Field(default=None, max_length=32)
@@ -38,6 +42,13 @@ class UserUpdate(BaseModel):
 
 class ResponseLengthPreferenceUpdate(BaseModel):
     response_length_preference: ResponseLengthPreference
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=2, max_length=255)
+    bio: str | None = Field(default=None, min_length=10, max_length=1000)
+    learning_goal: str | None = Field(default=None, min_length=10, max_length=1000)
+    response_length_preference: ResponseLengthPreference | None = None
 
 
 class UserRead(UserBase):
