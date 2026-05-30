@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("activateButton").addEventListener("click", () => updateStatus(true));
     document.getElementById("deactivateButton").addEventListener("click", () => updateStatus(false));
     document.getElementById("deleteButton").addEventListener("click", deleteSelectedUser);
+    document.getElementById("purgeButton").addEventListener("click", purgeSelectedUser);
     document.getElementById("createAdminForm").addEventListener("submit", createAdmin);
     loadUsers();
 });
@@ -92,6 +93,7 @@ async function loadProfile(userId) {
 
 function renderProfile(profile) {
     const user = profile.user;
+    const canPurge = isDeletedUser(user);
     document.getElementById("selectedUserLabel").textContent = `#${user.id}`;
     document.getElementById("profileName").textContent = user.full_name || user.email || `User ${user.id}`;
     document.getElementById("profileStatus").outerHTML = `<span class="badge rounded-pill ${user.is_active ? "text-bg-success" : "text-bg-secondary"}" id="profileStatus">${user.is_active ? "Active" : "Inactive"}</span>`;
@@ -107,6 +109,7 @@ function renderProfile(profile) {
         ["Created", formatDate(user.created_at)],
         ["Last Activity", formatDate(user.last_activity_at)]
     ].map(row => `<div class="profile-row"><span>${escapeHtml(row[0])}</span><span>${escapeHtml(row[1])}</span></div>`).join("");
+    document.getElementById("purgeButton").classList.toggle("d-none", !canPurge);
     document.getElementById("activityList").innerHTML = (profile.activity_history || []).map(item => `
         <article class="activity-item">
             <div class="activity-title">
@@ -169,6 +172,44 @@ async function deleteSelectedUser() {
     }
 }
 
+async function purgeSelectedUser() {
+    if (!selectedUserId) {
+        showError("Select a user first.");
+        return;
+    }
+    const user = currentUsers.find(item => item.id === selectedUserId);
+    if (user && !isDeletedUser(user)) {
+        showError("Only inactive deleted users can be purged.");
+        return;
+    }
+    if (!confirm("Permanently purge this deleted user and all dependent data? This cannot be undone.")) {
+        return;
+    }
+    const confirmation = prompt("Type DELETE or PURGE to permanently remove this user.");
+    if (confirmation !== "DELETE" && confirmation !== "PURGE") {
+        showError("Purge cancelled. Confirmation text did not match DELETE or PURGE.");
+        return;
+    }
+    hideAlerts();
+    try {
+        const response = await fetch(`${window.CHazyAdminConfig.usersEndpoint}/${selectedUserId}/purge`, {
+            method: "DELETE",
+            headers: adminJsonHeaders(false)
+        });
+        if (!response.ok) {
+            const detail = await response.json().catch(() => ({}));
+            throw new Error(detail.detail || `Purge returned HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        selectedUserId = null;
+        showSuccess(data.message || "User permanently removed.");
+        resetProfile();
+        await loadUsers();
+    } catch (error) {
+        showError(error.message || "Unable to purge user.");
+    }
+}
+
 async function createAdmin(event) {
     event.preventDefault();
     hideAlerts();
@@ -206,7 +247,14 @@ function resetProfile() {
     document.getElementById("profileDetails").className = "profile-details empty-state";
     document.getElementById("profileDetails").textContent = "Choose a user from the directory to inspect profile and activity.";
     document.getElementById("profileActions").classList.add("d-none");
+    document.getElementById("purgeButton").classList.add("d-none");
     document.getElementById("activityList").innerHTML = "";
+}
+
+function isDeletedUser(user) {
+    const email = String(user.email || "").toLowerCase();
+    const name = String(user.full_name || "").toLowerCase();
+    return !user.is_active && (email.startsWith("deleted-user-") || name === "deleted user");
 }
 
 function statusBadge(active) {

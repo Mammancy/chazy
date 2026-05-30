@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from app.config.settings import get_settings
 from app.schemas.health import HealthResponse
 from app.services.email_service import EmailService
@@ -5,6 +7,7 @@ from app.services.email_service import EmailService
 
 class HealthService:
     @staticmethod
+    @lru_cache(maxsize=1)
     def build_health_response() -> HealthResponse:
         settings = get_settings()
         return HealthResponse(

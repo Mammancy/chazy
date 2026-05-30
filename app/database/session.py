@@ -23,6 +23,9 @@ def enable_sqlite_foreign_keys(dbapi_connection, _) -> None:
     if database_url.startswith("sqlite"):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA temp_store=MEMORY")
         cursor.close()
 
 
@@ -95,6 +98,49 @@ def _upgrade_sqlite_schema() -> None:
             for column_name, statement in vocabulary_column_sql.items():
                 if column_name not in vocabulary_columns:
                     connection.execute(text(statement))
+
+        _create_performance_indexes(connection, table_names)
+
+
+def _create_performance_indexes(connection, table_names: set[str]) -> None:
+    index_statements = {
+        "users": [
+            "CREATE INDEX IF NOT EXISTS ix_users_created_at ON users(created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_users_is_active ON users(is_active)",
+        ],
+        "messages": [
+            "CREATE INDEX IF NOT EXISTS ix_messages_created_at ON messages(created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_messages_role_created_at ON messages(role, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_messages_user_created_at ON messages(user_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_messages_conversation_created_at ON messages(conversation_id, created_at)",
+        ],
+        "conversations": [
+            "CREATE INDEX IF NOT EXISTS ix_conversations_created_at ON conversations(created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_conversations_user_updated_at ON conversations(user_id, updated_at)",
+        ],
+        "speaking_challenge_completions": [
+            "CREATE INDEX IF NOT EXISTS ix_speaking_completions_completed_at ON speaking_challenge_completions(completed_at)",
+            "CREATE INDEX IF NOT EXISTS ix_speaking_completions_user_session ON speaking_challenge_completions(user_id, client_session_id)",
+        ],
+        "vocabulary_notebook_entries": [
+            "CREATE INDEX IF NOT EXISTS ix_vocabulary_entries_created_at ON vocabulary_notebook_entries(created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_vocabulary_entries_mastery ON vocabulary_notebook_entries(mastery_status)",
+        ],
+        "vocabulary_review_sessions": [
+            "CREATE INDEX IF NOT EXISTS ix_vocabulary_reviews_created_at ON vocabulary_review_sessions(created_at)",
+        ],
+        "placement_assessment_sessions": [
+            "CREATE INDEX IF NOT EXISTS ix_placement_sessions_status ON placement_assessment_sessions(status)",
+        ],
+        "pronunciation_practice_sessions": [
+            "CREATE INDEX IF NOT EXISTS ix_pronunciation_sessions_status ON pronunciation_practice_sessions(status)",
+        ],
+    }
+    for table_name, statements in index_statements.items():
+        if table_name not in table_names:
+            continue
+        for statement in statements:
+            connection.execute(text(statement))
 
 
 def _seed_default_data() -> None:

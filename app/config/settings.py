@@ -45,7 +45,7 @@ WEAK_JWT_SECRET_VALUES = {
 
 
 class Settings(BaseModel):
-    app_name: str = Field(default=os.getenv("APP_NAME", "Chazy"))
+    app_name: str = Field(default=os.getenv("APP_NAME", "Confidence"))
     app_version: str = Field(default=os.getenv("APP_VERSION", "0.1.0"))
     environment: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
     debug: bool = Field(default=os.getenv("DEBUG", "false").lower() == "true")
@@ -57,6 +57,7 @@ class Settings(BaseModel):
     openai_timeout_seconds: float = Field(default=_env_float("OPENAI_TIMEOUT_SECONDS", 30.0))
     openai_max_retries: int = Field(default=_env_int("OPENAI_MAX_RETRIES", 2))
     openai_retry_base_delay_seconds: float = Field(default=_env_float("OPENAI_RETRY_BASE_DELAY_SECONDS", 0.5))
+    openai_startup_client_check: bool = Field(default_factory=lambda: _env_bool("OPENAI_STARTUP_CLIENT_CHECK", False))
     smtp_host: str | None = Field(default_factory=lambda: os.getenv("SMTP_HOST"))
     smtp_port: int = Field(default_factory=lambda: _env_int("SMTP_PORT", 587))
     smtp_username: str | None = Field(default_factory=lambda: os.getenv("SMTP_USERNAME"))

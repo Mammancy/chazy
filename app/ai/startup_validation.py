@@ -2,8 +2,6 @@
 
 import logging
 
-from openai import AsyncOpenAI, OpenAIError
-
 from app.config.settings import ENV_FILE, get_settings
 
 logger = logging.getLogger(__name__)
@@ -32,8 +30,17 @@ async def validate_openai_startup_configuration() -> bool:
         )
         return False
 
+    if not settings.openai_startup_client_check:
+        logger.info(
+            "OpenAI startup validation passed: OPENAI_API_KEY is present. Client initialization deferred until first OpenAI request. model=%s",
+            model,
+        )
+        return True
+
     client: AsyncOpenAI | None = None
     try:
+        from openai import AsyncOpenAI, OpenAIError
+
         client = AsyncOpenAI()
         logger.info(
             "OpenAI startup validation passed: OPENAI_API_KEY is present and AsyncOpenAI client initialized. model=%s",

@@ -11,6 +11,7 @@ from app.schemas.admin_users import (
     AdminUserStatusResponse,
     AdminUserStatusUpdate,
 )
+from app.schemas.user import BasicResponse
 from app.services.admin_user_service import AdminUserService
 from app.services.admin_audit_service import AdminAuditService
 
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/admin/users", tags=["admin-users"])
 
 
 @router.get("/", response_model=AdminUserListResponse)
-async def list_admin_users(
+def list_admin_users(
     search: str | None = Query(default=None),
     status: str = Query(default="all", pattern="^(all|active|inactive)$"),
     limit: int = Query(default=25, ge=1, le=100),
@@ -30,7 +31,7 @@ async def list_admin_users(
 
 
 @router.post("/admins", response_model=AdminUserStatusResponse)
-async def create_admin_user(
+def create_admin_user(
     payload: AdminCreateRequest,
     request: Request,
     current_admin: User = Depends(get_admin_user),
@@ -50,7 +51,7 @@ async def create_admin_user(
 
 
 @router.get("/{user_id}", response_model=AdminUserProfileResponse)
-async def get_admin_user_profile(
+def get_admin_user_profile(
     user_id: int,
     current_admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
@@ -62,7 +63,7 @@ async def get_admin_user_profile(
 
 
 @router.patch("/{user_id}/status", response_model=AdminUserStatusResponse)
-async def update_admin_user_status(
+def update_admin_user_status(
     user_id: int,
     payload: AdminUserStatusUpdate,
     request: Request,
@@ -86,7 +87,7 @@ async def update_admin_user_status(
 
 
 @router.delete("/{user_id}", response_model=AdminUserStatusResponse)
-async def delete_admin_user(
+def delete_admin_user(
     user_id: int,
     request: Request,
     current_admin: User = Depends(get_admin_user),
@@ -105,5 +106,31 @@ async def delete_admin_user(
             target_id=user_id,
         )
         return result
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/{user_id}/purge", response_model=BasicResponse)
+def purge_admin_user(
+    user_id: int,
+    request: Request,
+    current_admin: User = Depends(get_admin_user),
+    csrf: None = Depends(require_admin_csrf),
+    db: Session = Depends(get_db),
+) -> BasicResponse:
+    if user_id == current_admin.id:
+        raise HTTPException(status_code=403, detail="Administrators cannot purge their own account.")
+    try:
+        AdminUserService(db).purge_user(user_id)
+        AdminAuditService(db).log(
+            admin_user=current_admin,
+            action="admin_user_purged",
+            request=request,
+            target_type="user",
+            target_id=user_id,
+        )
+        return BasicResponse(success=True, message="User permanently removed")
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

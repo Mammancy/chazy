@@ -6,7 +6,6 @@ from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, OpenAIError
 
 from app.config.settings import get_settings
 
@@ -40,6 +39,8 @@ async def test_openai() -> JSONResponse:
                 },
             },
         )
+
+    from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI, OpenAIError
 
     client = AsyncOpenAI()
     request_payload: dict[str, Any] = {

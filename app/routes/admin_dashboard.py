@@ -20,7 +20,7 @@ template_dir = Path(__file__).resolve().parents[1] / "templates"
 template_env = Environment(
     loader=FileSystemLoader(str(template_dir)),
     autoescape=select_autoescape(["html", "xml"]),
-    cache_size=0,
+    cache_size=100,
 )
 templates = Jinja2Templates(env=template_env)
 
@@ -28,25 +28,25 @@ router = APIRouter(tags=["admin-dashboard"])
 
 
 @router.get("/admin", include_in_schema=False)
-async def admin_home(current_admin: User = Depends(get_admin_user)) -> RedirectResponse:
+def admin_home(current_admin: User = Depends(get_admin_user)) -> RedirectResponse:
     return RedirectResponse(url="/admin/dashboard")
 
 
 @router.get("/admin/login", response_class=HTMLResponse, include_in_schema=False, response_model=None)
-async def admin_login_form(request: Request, db: Session = Depends(get_db)) -> HTMLResponse | RedirectResponse:
+def admin_login_form(request: Request, db: Session = Depends(get_db)) -> HTMLResponse | RedirectResponse:
     if not AuthService(db).admin_exists():
         return RedirectResponse(url="/admin/setup", status_code=status.HTTP_303_SEE_OTHER)
     return _login_response(request)
 
 
 @router.get("/admin/setup", response_class=HTMLResponse, include_in_schema=False, response_model=None)
-async def admin_setup_form(request: Request, db: Session = Depends(get_db)) -> HTMLResponse | RedirectResponse:
+def admin_setup_form(request: Request, db: Session = Depends(get_db)) -> HTMLResponse | RedirectResponse:
     if AuthService(db).admin_exists():
         return RedirectResponse(url="/admin/login", status_code=status.HTTP_303_SEE_OTHER)
     return templates.TemplateResponse(
         request,
         "admin/setup.html",
-        {"app_name": "Chazy", "error": None},
+        {"app_name": "Confidence", "error": None},
     )
 
 
@@ -65,7 +65,7 @@ async def admin_setup(request: Request, db: Session = Depends(get_db)) -> Redire
         return templates.TemplateResponse(
             request,
             "admin/setup.html",
-            {"app_name": "Chazy", "error": str(exc.detail)},
+            {"app_name": "Confidence", "error": str(exc.detail)},
             status_code=exc.status_code,
         )
 
@@ -122,7 +122,7 @@ async def admin_logout(
 
 
 @router.get("/admin/dashboard", response_class=HTMLResponse, include_in_schema=False)
-async def admin_dashboard(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
+def admin_dashboard(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
     return _admin_template(
         request,
         "admin/dashboard.html",
@@ -132,7 +132,7 @@ async def admin_dashboard(request: Request, current_admin: User = Depends(get_ad
 
 
 @router.get("/admin/users", response_class=HTMLResponse, include_in_schema=False)
-async def admin_user_analytics(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
+def admin_user_analytics(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
     return _admin_template(
         request,
         "admin/users.html",
@@ -142,7 +142,7 @@ async def admin_user_analytics(request: Request, current_admin: User = Depends(g
 
 
 @router.get("/admin/learning", response_class=HTMLResponse, include_in_schema=False)
-async def admin_learning_analytics(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
+def admin_learning_analytics(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
     return _admin_template(
         request,
         "admin/learning.html",
@@ -152,7 +152,7 @@ async def admin_learning_analytics(request: Request, current_admin: User = Depen
 
 
 @router.get("/admin/conversations", response_class=HTMLResponse, include_in_schema=False)
-async def admin_conversation_analytics(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
+def admin_conversation_analytics(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
     return _admin_template(
         request,
         "admin/conversations.html",
@@ -162,7 +162,7 @@ async def admin_conversation_analytics(request: Request, current_admin: User = D
 
 
 @router.get("/admin/openai-usage", response_class=HTMLResponse, include_in_schema=False)
-async def admin_openai_usage(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
+def admin_openai_usage(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
     return _admin_template(
         request,
         "admin/openai_usage.html",
@@ -172,7 +172,7 @@ async def admin_openai_usage(request: Request, current_admin: User = Depends(get
 
 
 @router.get("/admin/user-management", response_class=HTMLResponse, include_in_schema=False)
-async def admin_user_management(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
+def admin_user_management(request: Request, current_admin: User = Depends(get_admin_user)) -> HTMLResponse:
     return _admin_template(
         request,
         "admin/user_management.html",
@@ -187,7 +187,7 @@ def _admin_template(request: Request, template_name: str, current_admin: User, *
         request,
         template_name,
         {
-            "app_name": "Chazy",
+            "app_name": "Confidence",
             "admin_user": current_admin,
             "csrf_token": csrf_token,
             **context,
@@ -199,7 +199,7 @@ def _login_response(request: Request, error: str | None = None, status_code: int
     return templates.TemplateResponse(
         request,
         "admin/login.html",
-        {"app_name": "Chazy", "error": error},
+        {"app_name": "Confidence", "error": error},
         status_code=status_code,
     )
 

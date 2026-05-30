@@ -11,7 +11,7 @@ router = APIRouter(prefix="/admin/analytics", tags=["admin-analytics"])
 
 
 @router.get("/dashboard", response_model=AdminAnalyticsDashboardResponse)
-async def get_admin_analytics_dashboard(
+def get_admin_analytics_dashboard(
     window_days: int = Query(default=30, ge=1, le=365),
     current_admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),

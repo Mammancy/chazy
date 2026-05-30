@@ -8,9 +8,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.ai import OpenAIService, TemporaryConversationalResponseEngine
 from app.ai.english_learning_pipeline import EnglishLearningPipeline, GrammarAnalysis
 from app.ai.personality import CHAZY_SYSTEM_PROMPT
+from app.ai.temporary_response_engine import TemporaryConversationalResponseEngine
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
@@ -29,10 +29,19 @@ from app.services.memory_management_service import MemoryManagementService
 
 _TEMP_RESPONSE_ENGINE = TemporaryConversationalResponseEngine()
 _ENGLISH_PIPELINE = EnglishLearningPipeline()
-_OPENAI_SERVICE = OpenAIService()
+_OPENAI_SERVICE = None
 _COACHING_SERVICE = CoachingService()
 _HAUSA_SERVICE = HausaLearningService()
 logger = logging.getLogger(__name__)
+
+
+def _get_openai_service():
+    global _OPENAI_SERVICE
+    if _OPENAI_SERVICE is None:
+        from app.ai.openai_service import OpenAIService
+
+        _OPENAI_SERVICE = OpenAIService()
+    return _OPENAI_SERVICE
 
 
 class ChatService:
@@ -187,7 +196,7 @@ class ChatService:
         coaching_context: dict[str, Any],
         request_id: str | None = None,
     ) -> tuple[dict[str, str], str]:
-        result = await _OPENAI_SERVICE.generate_learning_response(
+        result = await _get_openai_service().generate_learning_response(
             system_prompt=CHAZY_SYSTEM_PROMPT,
             grammar_analysis=grammar_analysis,
             coaching_context=coaching_context,
