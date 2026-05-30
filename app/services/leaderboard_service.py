@@ -53,11 +53,44 @@ class LeaderboardService:
                 )
             )
 
-        rows.sort(key=lambda row: (row.xp, row.streak, row.achievement_points), reverse=True)
-        ranked_rows = [row.model_copy(update={"rank": index + 1}) for index, row in enumerate(rows)]
+        rows.sort(
+            key=lambda row: (
+                -row.xp,
+                -row.streak,
+                -row.achievement_points,
+                -row.speaking_challenges_completed,
+                -row.vocabulary_words,
+                -row.pronunciation_attempts,
+                row.name.lower(),
+                row.id,
+            )
+        )
+        ranked_rows = self._rank_rows(rows)
         current_user_rank = next((row.rank for row in ranked_rows if row.id == current_user.id), None)
 
         return LeaderboardResponse(users=ranked_rows[:limit], current_user_rank=current_user_rank)
+
+    @staticmethod
+    def _rank_rows(rows: list[LeaderboardUserResponse]) -> list[LeaderboardUserResponse]:
+        ranked_rows: list[LeaderboardUserResponse] = []
+        previous_score: tuple[int, int, int, int, int, int] | None = None
+        current_rank = 0
+
+        for index, row in enumerate(rows, start=1):
+            score = (
+                row.xp,
+                row.streak,
+                row.achievement_points,
+                row.speaking_challenges_completed,
+                row.vocabulary_words,
+                row.pronunciation_attempts,
+            )
+            if score != previous_score:
+                current_rank = index
+                previous_score = score
+            ranked_rows.append(row.model_copy(update={"rank": current_rank}))
+
+        return ranked_rows
 
     def _sum_by_user(self, user_column, value_column, user_ids: list[int]) -> dict[int, int]:
         result = self.db.execute(
