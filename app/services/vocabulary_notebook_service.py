@@ -143,6 +143,23 @@ class VocabularyNotebookService:
         self.db.refresh(entry)
         return VocabularyEntryResponse.model_validate(entry)
 
+    def delete_entry(self, entry_id: int, user_id: int | None = None) -> None:
+        entry = self.db.get(VocabularyNotebookEntry, entry_id)
+        if entry is None:
+            raise ValueError("Vocabulary entry not found.")
+        self._authorize_entry(entry, user_id)
+        review_items = list(
+            self.db.scalars(
+                select(VocabularyReviewSessionItem).where(
+                    VocabularyReviewSessionItem.entry_id == entry.id
+                )
+            ).all()
+        )
+        for item in review_items:
+            self.db.delete(item)
+        self.db.delete(entry)
+        self.db.commit()
+
     def create_review_session(self, payload: VocabularyReviewSessionCreate) -> VocabularyReviewSessionResponse:
         entries = self._due_entries(
             session_id=payload.session_id,

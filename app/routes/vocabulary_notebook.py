@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.dependencies.auth import authenticated_session_id, get_current_user
 from app.models.user import User
+from app.schemas.user import BasicResponse
 from app.schemas.vocabulary_notebook import (
     VocabularyBookmarkFromConversationRequest,
     VocabularyEntryCreate,
@@ -93,6 +94,21 @@ async def record_vocabulary_review(
 ) -> VocabularyEntryResponse:
     try:
         return VocabularyNotebookService(db).record_review(entry_id, payload, user_id=current_user.id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/{entry_id}", response_model=BasicResponse)
+async def delete_vocabulary_entry(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BasicResponse:
+    try:
+        VocabularyNotebookService(db).delete_entry(entry_id, user_id=current_user.id)
+        return BasicResponse(success=True, message="Vocabulary entry deleted.")
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
