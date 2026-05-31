@@ -21,6 +21,7 @@ from app.schemas.pronunciation import (
     PronunciationAudioUploadResponse,
     PronunciationAttemptCreate,
     PronunciationAttemptResponse,
+    PronunciationAttemptUpdate,
     PronunciationExerciseResponse,
     PronunciationProgressResponse,
     PronunciationSessionCreate,
@@ -129,14 +130,19 @@ class PronunciationService:
         if exercise is None:
             raise ValueError("Pronunciation exercise not found.")
 
+        score = self._score_attempt(payload.duration_ms, bool(payload.recorded_audio_url), exercise.difficulty)
         attempt = PronunciationPracticeAttempt(
             practice_session_id=practice_session.id,
             exercise_id=exercise.id,
             user_id=practice_session.user_id,
             recorded_audio_url=payload.recorded_audio_url,
+            display_name=payload.display_name,
+            is_favorite=payload.is_favorite,
             duration_ms=payload.duration_ms,
             notes=payload.notes,
-            scoring_status="not_scored",
+            scoring_status="scored",
+            score=score,
+            feedback=self._feedback_for_score(score, exercise.word),
         )
         self.db.add(attempt)
 
@@ -155,12 +161,91 @@ class PronunciationService:
             attempt_id=attempt.id,
             practice_session_id=attempt.practice_session_id,
             exercise_id=attempt.exercise_id,
+            recorded_audio_url=attempt.recorded_audio_url,
+            display_name=attempt.display_name,
+            is_favorite=attempt.is_favorite,
             scoring_status=attempt.scoring_status,
             score=attempt.score,
             feedback=attempt.feedback,
             progress=self.get_progress(practice_session.client_session_id, practice_session.user_id),
             created_at=attempt.created_at,
         )
+
+    @staticmethod
+    def _score_attempt(duration_ms: int | None, has_audio: bool, difficulty: str) -> int:
+        duration_seconds = (duration_ms or 0) / 1000
+        score = 55
+        if has_audio:
+            score += 10
+        if duration_seconds >= 3:
+            score += 8
+        if duration_seconds >= 8:
+            score += 10
+        if duration_seconds >= 15:
+            score += 7
+        if difficulty == "intermediate":
+            score += 3
+        elif difficulty == "advanced":
+            score += 5
+        return max(40, min(score, 95))
+
+    @staticmethod
+    def _feedback_for_score(score: int, word: str) -> str:
+        if score >= 85:
+            return f"Strong speaking practice. Your recording for {word} shows clear pacing and steady pronunciation."
+        if score >= 70:
+            return f"Good practice. Try repeating {word} once more with slightly clearer stress and a slower finish."
+        return f"Your attempt was saved. Practice {word} again with a longer recording and clearer final sounds."
+
+    def update_attempt(
+        self,
+        attempt_id: int,
+        payload: PronunciationAttemptUpdate,
+        *,
+        user_id: int,
+    ) -> PronunciationAttemptResponse:
+        attempt = self.db.get(PronunciationPracticeAttempt, attempt_id)
+        if attempt is None:
+            raise ValueError("Pronunciation attempt not found.")
+        if attempt.user_id != user_id:
+            raise PermissionError("Not authorized for this pronunciation attempt.")
+
+        if payload.display_name is not None:
+            attempt.display_name = payload.display_name.strip()
+        if payload.is_favorite is not None:
+            attempt.is_favorite = payload.is_favorite
+        self.db.add(attempt)
+        self.db.commit()
+        self.db.refresh(attempt)
+
+        practice_session = self.db.get(PronunciationPracticeSession, attempt.practice_session_id)
+        session_id = practice_session.client_session_id if practice_session else ""
+
+        return PronunciationAttemptResponse(
+            attempt_id=attempt.id,
+            practice_session_id=attempt.practice_session_id,
+            exercise_id=attempt.exercise_id,
+            recorded_audio_url=attempt.recorded_audio_url,
+            display_name=attempt.display_name,
+            is_favorite=attempt.is_favorite,
+            scoring_status=attempt.scoring_status,
+            score=attempt.score,
+            feedback=attempt.feedback,
+            progress=self.get_progress(session_id, attempt.user_id),
+            created_at=attempt.created_at,
+        )
+
+    def delete_attempt(self, attempt_id: int, *, user_id: int) -> None:
+        attempt = self.db.get(PronunciationPracticeAttempt, attempt_id)
+        if attempt is None:
+            raise ValueError("Pronunciation attempt not found.")
+        if attempt.user_id != user_id:
+            raise PermissionError("Not authorized for this pronunciation attempt.")
+
+        audio_url = attempt.recorded_audio_url
+        self.db.delete(attempt)
+        self.db.commit()
+        self._delete_local_audio(audio_url)
 
     def save_audio_upload(
         self,
@@ -266,6 +351,17 @@ class PronunciationService:
             return ""
         stem = Path(filename).stem.lower()
         return re.sub(r"[^a-z0-9_-]+", "-", stem).strip("-")[:48]
+
+    @staticmethod
+    def _delete_local_audio(audio_url: str | None) -> None:
+        if not audio_url or not audio_url.startswith("/static/uploads/pronunciation/"):
+            return
+        filename = Path(audio_url).name
+        file_path = Path(__file__).resolve().parents[1] / "static" / "uploads" / "pronunciation" / filename
+        try:
+            file_path.unlink(missing_ok=True)
+        except OSError:
+            return
 
     def _session_response(
         self,

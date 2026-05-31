@@ -101,6 +101,16 @@ def _upgrade_sqlite_schema() -> None:
                 if column_name not in vocabulary_columns:
                     connection.execute(text(statement))
 
+        if "pronunciation_practice_attempts" in table_names:
+            attempt_columns = {column["name"] for column in inspector.get_columns("pronunciation_practice_attempts")}
+            attempt_column_sql = {
+                "display_name": "ALTER TABLE pronunciation_practice_attempts ADD COLUMN display_name VARCHAR(160)",
+                "is_favorite": "ALTER TABLE pronunciation_practice_attempts ADD COLUMN is_favorite BOOLEAN DEFAULT 0",
+            }
+            for column_name, statement in attempt_column_sql.items():
+                if column_name not in attempt_columns:
+                    connection.execute(text(statement))
+
         _create_performance_indexes(connection, table_names)
 
 

@@ -37,8 +37,15 @@ class PronunciationSessionResponse(BaseModel):
 class PronunciationAttemptCreate(BaseModel):
     exercise_id: int = Field(..., ge=1)
     recorded_audio_url: str | None = None
+    display_name: str | None = Field(default=None, max_length=160)
+    is_favorite: bool = False
     duration_ms: int | None = Field(default=None, ge=0)
     notes: str | None = None
+
+
+class PronunciationAttemptUpdate(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=160)
+    is_favorite: bool | None = None
 
 
 class PronunciationAudioUploadCreate(BaseModel):
@@ -59,6 +66,9 @@ class PronunciationAttemptResponse(BaseModel):
     attempt_id: int
     practice_session_id: int
     exercise_id: int
+    recorded_audio_url: str | None = None
+    display_name: str | None = None
+    is_favorite: bool = False
     scoring_status: str
     score: int | None = None
     feedback: str | None = None

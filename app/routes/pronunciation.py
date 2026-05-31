@@ -9,12 +9,14 @@ from app.schemas.pronunciation import (
     PronunciationAudioUploadResponse,
     PronunciationAttemptCreate,
     PronunciationAttemptResponse,
+    PronunciationAttemptUpdate,
     PronunciationExerciseResponse,
     PronunciationProgressResponse,
     PronunciationSessionCreate,
     PronunciationSessionResponse,
 )
 from app.services.pronunciation_service import PronunciationService
+from app.schemas.user import BasicResponse
 
 router = APIRouter(prefix="/pronunciation", tags=["pronunciation"])
 
@@ -66,6 +68,36 @@ async def upload_pronunciation_audio(
     db: Session = Depends(get_db),
 ) -> PronunciationAudioUploadResponse:
     return PronunciationService(db).save_audio_upload(payload, user_id=current_user.id)
+
+
+@router.patch("/attempts/{attempt_id}", response_model=PronunciationAttemptResponse)
+async def update_pronunciation_attempt(
+    attempt_id: int,
+    payload: PronunciationAttemptUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PronunciationAttemptResponse:
+    try:
+        return PronunciationService(db).update_attempt(attempt_id, payload, user_id=current_user.id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/attempts/{attempt_id}", response_model=BasicResponse)
+async def delete_pronunciation_attempt(
+    attempt_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BasicResponse:
+    try:
+        PronunciationService(db).delete_attempt(attempt_id, user_id=current_user.id)
+        return BasicResponse(success=True, message="Recording deleted.")
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/progress", response_model=PronunciationProgressResponse)

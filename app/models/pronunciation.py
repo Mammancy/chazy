@@ -57,6 +57,8 @@ class PronunciationPracticeAttempt(Base):
     exercise_id: Mapped[int] = mapped_column(ForeignKey("pronunciation_exercises.id"), index=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     recorded_audio_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    is_favorite: Mapped[bool] = mapped_column(default=False)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     scoring_status: Mapped[str] = mapped_column(String(32), default="not_scored", index=True)
