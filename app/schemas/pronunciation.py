@@ -41,6 +41,20 @@ class PronunciationAttemptCreate(BaseModel):
     notes: str | None = None
 
 
+class PronunciationAudioUploadCreate(BaseModel):
+    filename: str | None = Field(default=None, max_length=160)
+    content_type: str = Field(default="audio/webm", max_length=80)
+    data_base64: str = Field(..., min_length=1)
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
+class PronunciationAudioUploadResponse(BaseModel):
+    audio_url: str
+    content_type: str
+    size_bytes: int
+    duration_ms: int | None = None
+
+
 class PronunciationAttemptResponse(BaseModel):
     attempt_id: int
     practice_session_id: int

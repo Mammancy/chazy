@@ -5,6 +5,8 @@ from app.database.session import get_db
 from app.dependencies.auth import authenticated_session_id, get_current_user
 from app.models.user import User
 from app.schemas.pronunciation import (
+    PronunciationAudioUploadCreate,
+    PronunciationAudioUploadResponse,
     PronunciationAttemptCreate,
     PronunciationAttemptResponse,
     PronunciationExerciseResponse,
@@ -55,6 +57,15 @@ async def record_pronunciation_attempt(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/audio-uploads", response_model=PronunciationAudioUploadResponse)
+async def upload_pronunciation_audio(
+    payload: PronunciationAudioUploadCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PronunciationAudioUploadResponse:
+    return PronunciationService(db).save_audio_upload(payload, user_id=current_user.id)
 
 
 @router.get("/progress", response_model=PronunciationProgressResponse)
