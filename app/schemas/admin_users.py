@@ -14,6 +14,7 @@ class AdminUserSummaryResponse(BaseModel):
     state: str | None
     timezone: str
     is_active: bool
+    public_profile_visible: bool
     created_at: datetime
     updated_at: datetime
     conversation_count: int
@@ -41,7 +42,8 @@ class AdminUserProfileResponse(BaseModel):
 
 
 class AdminUserStatusUpdate(BaseModel):
-    is_active: bool
+    is_active: bool | None = None
+    public_profile_visible: bool | None = None
 
 
 class AdminUserStatusResponse(BaseModel):

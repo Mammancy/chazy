@@ -248,12 +248,32 @@ class AuthorizationBoundaryTests(unittest.TestCase):
         self.assertEqual(session["user_id"], second["user"]["id"])
         self.assertEqual(session["session_id"], f"chazy-user-{second['user']['id']}")
 
+        progress_before_attempt = self.client.get(
+            "/api/v1/pronunciation/progress",
+            params={"session_id": "spoofed-session"},
+            headers=self._auth_header(second),
+        )
+        self.assertEqual(progress_before_attempt.status_code, 200, progress_before_attempt.text)
+        self.assertTrue(progress_before_attempt.json()["scoring_ready"])
+        self.assertEqual(progress_before_attempt.json()["scoring_status"], "ready")
+
         forbidden = self.client.post(
             f"/api/v1/pronunciation/sessions/{session['practice_session_id']}/attempts",
             json={"exercise_id": 1, "duration_ms": 1000},
             headers=self._auth_header(first),
         )
         self.assertEqual(forbidden.status_code, 403)
+
+        attempt = self.client.post(
+            f"/api/v1/pronunciation/sessions/{session['practice_session_id']}/attempts",
+            json={"exercise_id": 1, "duration_ms": 1000},
+            headers=self._auth_header(second),
+        )
+        self.assertEqual(attempt.status_code, 200, attempt.text)
+        self.assertEqual(attempt.json()["scoring_status"], "scored")
+        self.assertIsNotNone(attempt.json()["score"])
+        self.assertTrue(attempt.json()["progress"]["scoring_ready"])
+        self.assertEqual(attempt.json()["progress"]["scoring_status"], "scored")
 
     def test_achievements_ignore_spoofed_identity(self):
         first = self._sign_up("achievement-first@example.com")
@@ -295,6 +315,33 @@ class AuthorizationBoundaryTests(unittest.TestCase):
             headers=self._auth_header(first),
         )
         self.assertEqual(forbidden_answer.status_code, 403)
+
+    def test_placement_result_does_not_complete_active_assessment(self):
+        auth = self._sign_up("placement-active@example.com")
+        created = self.client.post(
+            "/api/v1/placement-assessment/start",
+            json={"session_id": "placement-active"},
+            headers=self._auth_header(auth),
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        assessment_id = created.json()["assessment_session_id"]
+
+        result = self.client.get(
+            f"/api/v1/placement-assessment/{assessment_id}/result",
+            headers=self._auth_header(auth),
+        )
+        self.assertEqual(result.status_code, 404)
+        self.assertEqual(result.json()["detail"], "Placement assessment is not completed yet.")
+
+        state = self.client.get(
+            f"/api/v1/placement-assessment/{assessment_id}",
+            headers=self._auth_header(auth),
+        )
+        self.assertEqual(state.status_code, 200, state.text)
+        state_body = state.json()
+        self.assertEqual(state_body["status"], "active")
+        self.assertIsNone(state_body["result"])
+        self.assertEqual(state_body["current_step"], 0)
 
     def test_conversation_scenario_uses_authenticated_identity_and_blocks_cross_user_turns(self):
         first = self._sign_up("scenario-first@example.com")

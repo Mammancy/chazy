@@ -27,6 +27,7 @@ class User(Base):
     response_length_preference: Mapped[str] = mapped_column(String(32), default="SHORT")
     role: Mapped[str] = mapped_column(String(32), default="user", index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    public_profile_visible: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

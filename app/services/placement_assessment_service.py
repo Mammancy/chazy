@@ -137,9 +137,7 @@ class PlacementAssessmentService:
             raise ValueError("Placement assessment session not found.")
         self._authorize_session(session, user_id)
         if session.status != "completed":
-            self._complete(session)
-            self.db.commit()
-            self.db.refresh(session)
+            raise ValueError("Placement assessment is not completed yet.")
         return PlacementAssessmentResultResponse(
             assessment_session_id=session.id,
             session_id=session.session_id,

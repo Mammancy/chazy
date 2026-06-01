@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("statusFilter").addEventListener("change", loadUsers);
     document.getElementById("activateButton").addEventListener("click", () => updateStatus(true));
     document.getElementById("deactivateButton").addEventListener("click", () => updateStatus(false));
+    document.getElementById("visibilityButton").addEventListener("click", togglePublicProfileVisibility);
     document.getElementById("deleteButton").addEventListener("click", deleteSelectedUser);
     document.getElementById("purgeButton").addEventListener("click", purgeSelectedUser);
     document.getElementById("createAdminForm").addEventListener("submit", createAdmin);
@@ -104,11 +105,13 @@ function renderProfile(profile) {
         ["Phone", user.phone_number || "None"],
         ["Location", [user.state, user.country].filter(Boolean).join(", ") || "None"],
         ["Timezone", user.timezone],
+        ["Public Profile", user.public_profile_visible ? "Visible" : "Hidden"],
         ["Conversations", user.conversation_count],
         ["Messages", user.message_count],
         ["Created", formatDate(user.created_at)],
         ["Last Activity", formatDate(user.last_activity_at)]
     ].map(row => `<div class="profile-row"><span>${escapeHtml(row[0])}</span><span>${escapeHtml(row[1])}</span></div>`).join("");
+    document.getElementById("visibilityButton").textContent = user.public_profile_visible ? "Hide Public Profile" : "Show Public Profile";
     document.getElementById("purgeButton").classList.toggle("d-none", !canPurge);
     document.getElementById("activityList").innerHTML = (profile.activity_history || []).map(item => `
         <article class="activity-item">
@@ -142,6 +145,36 @@ async function updateStatus(isActive) {
         await loadProfile(selectedUserId);
     } catch (error) {
         showError(error.message || "Unable to update account status.");
+    }
+}
+
+async function togglePublicProfileVisibility() {
+    if (!selectedUserId) {
+        showError("Select a user first.");
+        return;
+    }
+    const user = currentUsers.find(item => item.id === selectedUserId);
+    if (!user) {
+        showError("Selected user is not available in the current list.");
+        return;
+    }
+    hideAlerts();
+    try {
+        const response = await fetch(`${window.CHazyAdminConfig.usersEndpoint}/${selectedUserId}/status`, {
+            method: "PATCH",
+            headers: adminJsonHeaders(),
+            body: JSON.stringify({public_profile_visible: !user.public_profile_visible})
+        });
+        if (!response.ok) {
+            const detail = await response.json().catch(() => ({}));
+            throw new Error(detail.detail || `Visibility update returned HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        showSuccess(data.message || "Public profile visibility updated.");
+        await loadUsers();
+        await loadProfile(selectedUserId);
+    } catch (error) {
+        showError(error.message || "Unable to update public profile visibility.");
     }
 }
 
@@ -247,6 +280,7 @@ function resetProfile() {
     document.getElementById("profileDetails").className = "profile-details empty-state";
     document.getElementById("profileDetails").textContent = "Choose a user from the directory to inspect profile and activity.";
     document.getElementById("profileActions").classList.add("d-none");
+    document.getElementById("visibilityButton").textContent = "Hide Public Profile";
     document.getElementById("purgeButton").classList.add("d-none");
     document.getElementById("activityList").innerHTML = "";
 }

@@ -84,6 +84,7 @@ def _upgrade_sqlite_schema() -> None:
                 "password_reset_expires_at": "ALTER TABLE users ADD COLUMN password_reset_expires_at DATETIME",
                 "response_length_preference": "ALTER TABLE users ADD COLUMN response_length_preference VARCHAR(32) DEFAULT 'SHORT'",
                 "role": "ALTER TABLE users ADD COLUMN role VARCHAR(32) DEFAULT 'user'",
+                "public_profile_visible": "ALTER TABLE users ADD COLUMN public_profile_visible BOOLEAN DEFAULT 1",
             }
             for column_name, statement in user_column_sql.items():
                 if column_name not in user_columns:

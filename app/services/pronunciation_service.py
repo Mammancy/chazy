@@ -304,11 +304,17 @@ class PronunciationService:
         session_ids = [row.id for row in sessions]
 
         attempts_count = 0
+        scored_attempts_count = 0
         words_practiced = 0
         last_practiced_at = None
         if session_ids:
             attempts_count = self.db.query(PronunciationPracticeAttempt).filter(
                 PronunciationPracticeAttempt.practice_session_id.in_(session_ids)
+            ).count()
+            scored_attempts_count = self.db.query(PronunciationPracticeAttempt).filter(
+                PronunciationPracticeAttempt.practice_session_id.in_(session_ids),
+                PronunciationPracticeAttempt.scoring_status == "scored",
+                PronunciationPracticeAttempt.score.is_not(None),
             ).count()
             words_practiced = self.db.query(PronunciationPracticeAttempt.exercise_id).filter(
                 PronunciationPracticeAttempt.practice_session_id.in_(session_ids)
@@ -319,6 +325,9 @@ class PronunciationService:
 
         active_session = sessions[0] if sessions else None
         completed_sessions = sum(1 for row in sessions if row.status == "completed")
+        scoring_status = "ready"
+        if attempts_count > 0:
+            scoring_status = "scored" if scored_attempts_count == attempts_count else "partial"
         return PronunciationProgressResponse(
             session_id=session_id,
             user_id=user_id,
@@ -328,7 +337,8 @@ class PronunciationService:
             attempts_count=attempts_count,
             completed_sessions=completed_sessions,
             last_practiced_at=last_practiced_at,
-            scoring_ready=False,
+            scoring_ready=True,
+            scoring_status=scoring_status,
         )
 
     def _resolve_exercises(self, payload: PronunciationSessionCreate) -> list[PronunciationExercise]:

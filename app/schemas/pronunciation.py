@@ -85,4 +85,5 @@ class PronunciationProgressResponse(BaseModel):
     attempts_count: int
     completed_sessions: int
     last_practiced_at: datetime | None = None
-    scoring_ready: bool = False
+    scoring_ready: bool = True
+    scoring_status: str = "ready"

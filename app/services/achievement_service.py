@@ -10,6 +10,7 @@ from app.models.conversation import Conversation
 from app.models.conversation_scenario import ConversationScenarioSession
 from app.models.message import Message
 from app.models.placement_assessment import PlacementAssessmentSession
+from app.models.practice_session import PracticeSession
 from app.models.pronunciation import PronunciationPracticeSession
 from app.schemas.achievement import (
     AchievementAwardResponse,
@@ -44,6 +45,8 @@ ACHIEVEMENT_CATALOG = [
     AchievementDefinition("scenario_1", "conversation", "Role-Play Starter", "Complete one guided role-play scenario.", "completed_scenarios", 1, 25),
     AchievementDefinition("pronunciation_1", "pronunciation", "Pronunciation Starter", "Complete one pronunciation practice session.", "pronunciation_sessions", 1, 20),
     AchievementDefinition("assessment_complete", "milestone", "Level Check Complete", "Complete an English placement assessment.", "completed_assessments", 1, 30),
+    AchievementDefinition("partner_practice_1", "practice_session", "Human Practice Starter", "Complete one scheduled partner practice session.", "completed_practice_sessions", 1, 20),
+    AchievementDefinition("partner_practice_5", "practice_session", "Conversation Partner", "Complete five scheduled partner practice sessions.", "completed_practice_sessions", 5, 60),
     AchievementDefinition("practice_messages_10", "consistency", "Practice Consistency", "Send 10 learner messages to Chazy.", "practice_messages", 10, 25),
     AchievementDefinition("practice_messages_50", "consistency", "Steady Learner", "Send 50 learner messages to Chazy.", "practice_messages", 50, 60),
 ]
@@ -141,6 +144,7 @@ class AchievementService:
             "completed_scenarios": self._completed_scenarios(session_id=session_id, user_id=user_id),
             "pronunciation_sessions": self._pronunciation_sessions(session_id=session_id, user_id=user_id),
             "completed_assessments": self._completed_assessments(session_id=session_id, user_id=user_id),
+            "completed_practice_sessions": self._completed_practice_sessions(user_id=user_id),
             "practice_messages": self._practice_messages(session_id=session_id, user_id=user_id),
         }
 
@@ -205,3 +209,14 @@ class AchievementService:
         if user_id is not None:
             query = query.filter(PlacementAssessmentSession.user_id == user_id)
         return query.count()
+
+    def _completed_practice_sessions(self, *, user_id: int | None) -> int:
+        if user_id is None:
+            return 0
+        return self.db.query(PracticeSession).filter(
+            PracticeSession.status == "completed",
+            (
+                (PracticeSession.requester_user_id == user_id)
+                | (PracticeSession.partner_user_id == user_id)
+            ),
+        ).count()

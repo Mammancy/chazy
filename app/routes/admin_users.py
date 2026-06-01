@@ -72,14 +72,23 @@ def update_admin_user_status(
     db: Session = Depends(get_db),
 ) -> AdminUserStatusResponse:
     try:
-        result = AdminUserService(db).update_status(user_id, payload.is_active)
+        if payload.is_active is None and payload.public_profile_visible is None:
+            raise HTTPException(status_code=422, detail="At least one status field is required.")
+        result = AdminUserService(db).update_status(
+            user_id,
+            is_active=payload.is_active,
+            public_profile_visible=payload.public_profile_visible,
+        )
         AdminAuditService(db).log(
             admin_user=current_admin,
             action="admin_user_status_updated",
             request=request,
             target_type="user",
             target_id=user_id,
-            metadata={"is_active": payload.is_active},
+            metadata={
+                "is_active": payload.is_active,
+                "public_profile_visible": payload.public_profile_visible,
+            },
         )
         return result
     except ValueError as exc:

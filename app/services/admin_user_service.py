@@ -81,15 +81,27 @@ class AdminUserService:
             activity_history=self._activity_history(user_id),
         )
 
-    def update_status(self, user_id: int, is_active: bool) -> AdminUserStatusResponse:
+    def update_status(
+        self,
+        user_id: int,
+        is_active: bool | None = None,
+        public_profile_visible: bool | None = None,
+    ) -> AdminUserStatusResponse:
         user = self._user_or_error(user_id)
-        user.is_active = is_active
+        changes = []
+        if is_active is not None:
+            user.is_active = is_active
+            changes.append("activated" if is_active else "deactivated")
+        if public_profile_visible is not None:
+            user.public_profile_visible = public_profile_visible
+            changes.append("public profile enabled" if public_profile_visible else "public profile hidden")
+        if not changes:
+            raise ValueError("No account status changes were provided.")
         self.db.commit()
         self.db.refresh(user)
-        state = "activated" if is_active else "deactivated"
         return AdminUserStatusResponse(
             success=True,
-            message=f"User {state} successfully.",
+            message=f"User {' and '.join(changes)} successfully.",
             user=self._summary(user),
         )
 
@@ -298,6 +310,7 @@ class AdminUserService:
                     state=user.state,
                     timezone=user.timezone,
                     is_active=user.is_active,
+                    public_profile_visible=user.public_profile_visible,
                     created_at=user.created_at,
                     updated_at=user.updated_at,
                     conversation_count=int(conversation_counts.get(user.id, 0)),

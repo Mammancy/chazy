@@ -10,6 +10,8 @@ from app.models.memory import Memory
 from app.models.memory_summary import MemorySummary
 from app.models.message import Message
 from app.models.placement_assessment import PlacementAssessmentAnswer, PlacementAssessmentSession
+from app.models.practice_session import PracticeSession
+from app.models.practice_room import PracticeRoom
 from app.models.pronunciation import (
     PronunciationExercise,
     PronunciationPracticeAttempt,
@@ -17,6 +19,7 @@ from app.models.pronunciation import (
 )
 from app.models.refresh_token import RefreshToken
 from app.models.speaking_challenge import SpeakingChallenge, SpeakingChallengeCompletion
+from app.models.speaking_partner import PracticeRequest, SpeakingPartnerProfile
 from app.models.user import User
 from app.models.vocabulary_notebook import (
     VocabularyNotebookEntry,
@@ -38,12 +41,16 @@ __all__ = [
     "MemorySummary",
     "PlacementAssessmentSession",
     "PlacementAssessmentAnswer",
+    "PracticeSession",
+    "PracticeRoom",
     "PronunciationExercise",
     "PronunciationPracticeSession",
     "PronunciationPracticeAttempt",
     "RefreshToken",
     "SpeakingChallenge",
     "SpeakingChallengeCompletion",
+    "SpeakingPartnerProfile",
+    "PracticeRequest",
     "VocabularyNotebookEntry",
     "VocabularyReviewSession",
     "VocabularyReviewSessionItem",

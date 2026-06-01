@@ -19,6 +19,7 @@ class UserBase(BaseModel):
     response_length_preference: ResponseLengthPreference = "SHORT"
     role: str = Field(default="user", max_length=32)
     is_active: bool = True
+    public_profile_visible: bool = True
 
 
 class UserCreate(UserBase):
@@ -38,6 +39,7 @@ class UserUpdate(BaseModel):
     response_length_preference: ResponseLengthPreference | None = None
     role: str | None = Field(default=None, max_length=32)
     is_active: bool | None = None
+    public_profile_visible: bool | None = None
 
 
 class ResponseLengthPreferenceUpdate(BaseModel):
