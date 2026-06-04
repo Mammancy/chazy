@@ -112,6 +112,104 @@ def _upgrade_sqlite_schema() -> None:
                 if column_name not in attempt_columns:
                     connection.execute(text(statement))
 
+        if "lesson_progress" not in table_names:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS lesson_progress (
+                    id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    lesson_id VARCHAR(120) NOT NULL,
+                    progress INTEGER NOT NULL DEFAULT 0,
+                    xp_awarded INTEGER NOT NULL DEFAULT 0,
+                    badge VARCHAR(160),
+                    completed_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    CONSTRAINT uq_lesson_progress_user_lesson UNIQUE (user_id, lesson_id),
+                    FOREIGN KEY(user_id) REFERENCES users (id)
+                )
+            """))
+            table_names.add("lesson_progress")
+
+        if "practice_room_messages" not in table_names:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS practice_room_messages (
+                    id INTEGER NOT NULL,
+                    room_id INTEGER NOT NULL,
+                    session_id INTEGER NOT NULL,
+                    sender_user_id INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    message_type VARCHAR(32) DEFAULT 'message' NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY(room_id) REFERENCES practice_rooms (id),
+                    FOREIGN KEY(session_id) REFERENCES practice_sessions (id),
+                    FOREIGN KEY(sender_user_id) REFERENCES users (id)
+                )
+            """))
+            table_names.add("practice_room_messages")
+
+        if "partner_reviews" not in table_names:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS partner_reviews (
+                    id INTEGER NOT NULL,
+                    session_id INTEGER NOT NULL,
+                    reviewer_id INTEGER NOT NULL,
+                    reviewed_user_id INTEGER NOT NULL,
+                    rating INTEGER NOT NULL,
+                    comment TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    CONSTRAINT uq_partner_reviews_session_reviewer UNIQUE (session_id, reviewer_id),
+                    FOREIGN KEY(session_id) REFERENCES practice_sessions (id),
+                    FOREIGN KEY(reviewer_id) REFERENCES users (id),
+                    FOREIGN KEY(reviewed_user_id) REFERENCES users (id)
+                )
+            """))
+            table_names.add("partner_reviews")
+
+        if "speaking_evaluations" not in table_names:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS speaking_evaluations (
+                    id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    transcript TEXT NOT NULL,
+                    duration_seconds INTEGER NOT NULL,
+                    overall_score INTEGER NOT NULL,
+                    grammar_score INTEGER NOT NULL,
+                    fluency_score INTEGER NOT NULL,
+                    vocabulary_score INTEGER NOT NULL,
+                    confidence_score INTEGER NOT NULL,
+                    coach_feedback TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY(user_id) REFERENCES users (id)
+                )
+            """))
+            table_names.add("speaking_evaluations")
+
+        if "retention_states" not in table_names:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS retention_states (
+                    id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    freeze_tokens INTEGER DEFAULT 0 NOT NULL,
+                    last_checkin_date DATE,
+                    last_freeze_earned_date DATE,
+                    last_freeze_used_date DATE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    PRIMARY KEY (id),
+                    CONSTRAINT uq_retention_states_user UNIQUE (user_id),
+                    FOREIGN KEY(user_id) REFERENCES users (id)
+                )
+            """))
+            table_names.add("retention_states")
+        else:
+            retention_columns = {column["name"] for column in inspector.get_columns("retention_states")}
+            if "last_freeze_used_date" not in retention_columns:
+                connection.execute(text("ALTER TABLE retention_states ADD COLUMN last_freeze_used_date DATE"))
+
         _create_performance_indexes(connection, table_names)
 
 
@@ -147,6 +245,30 @@ def _create_performance_indexes(connection, table_names: set[str]) -> None:
         ],
         "pronunciation_practice_sessions": [
             "CREATE INDEX IF NOT EXISTS ix_pronunciation_sessions_status ON pronunciation_practice_sessions(status)",
+        ],
+        "lesson_progress": [
+            "CREATE INDEX IF NOT EXISTS ix_lesson_progress_user_id ON lesson_progress(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_lesson_progress_lesson_id ON lesson_progress(lesson_id)",
+            "CREATE INDEX IF NOT EXISTS ix_lesson_progress_completed_at ON lesson_progress(completed_at)",
+        ],
+        "practice_room_messages": [
+            "CREATE INDEX IF NOT EXISTS ix_practice_room_messages_room_id ON practice_room_messages(room_id)",
+            "CREATE INDEX IF NOT EXISTS ix_practice_room_messages_session_id ON practice_room_messages(session_id)",
+            "CREATE INDEX IF NOT EXISTS ix_practice_room_messages_sender_user_id ON practice_room_messages(sender_user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_practice_room_messages_created_at ON practice_room_messages(created_at)",
+        ],
+        "partner_reviews": [
+            "CREATE INDEX IF NOT EXISTS ix_partner_reviews_session_id ON partner_reviews(session_id)",
+            "CREATE INDEX IF NOT EXISTS ix_partner_reviews_reviewer_id ON partner_reviews(reviewer_id)",
+            "CREATE INDEX IF NOT EXISTS ix_partner_reviews_reviewed_user_id ON partner_reviews(reviewed_user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_partner_reviews_created_at ON partner_reviews(created_at)",
+        ],
+        "speaking_evaluations": [
+            "CREATE INDEX IF NOT EXISTS ix_speaking_evaluations_user_id ON speaking_evaluations(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_speaking_evaluations_created_at ON speaking_evaluations(created_at)",
+        ],
+        "retention_states": [
+            "CREATE INDEX IF NOT EXISTS ix_retention_states_user_id ON retention_states(user_id)",
         ],
     }
     for table_name, statements in index_statements.items():

@@ -74,6 +74,20 @@ class RefreshTokenService:
         if commit:
             self.db.commit()
 
+    def list_active_for_user(self, user_id: int) -> list[RefreshToken]:
+        now = self._now()
+        return list(
+            self.db.scalars(
+                select(RefreshToken)
+                .where(
+                    RefreshToken.user_id == user_id,
+                    RefreshToken.revoked_at.is_(None),
+                    RefreshToken.expires_at > now,
+                )
+                .order_by(RefreshToken.created_at.desc())
+            ).all()
+        )
+
     def _store_refresh_token(self, *, user: User, refresh_token: str) -> RefreshToken:
         claims = TokenService.decode_refresh_claims(refresh_token)
         token_record = RefreshToken(

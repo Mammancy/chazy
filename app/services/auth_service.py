@@ -193,6 +193,16 @@ class AuthService:
             except EmailDeliveryError:
                 logger.exception("password_reset_success email delivery failed user_id=%s", user.id)
 
+    def change_password(self, *, user_id: int, current_password: str, new_password: str) -> None:
+        user = self.get_profile(user_id)
+        if not user.password_hash or not self._verify_password(current_password, user.password_hash):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect.")
+
+        user.password_hash = self._hash_password(new_password)
+        self.db.add(user)
+        RefreshTokenService(self.db).revoke_all_for_user(user.id, commit=False)
+        self.db.commit()
+
     def _build_reset_link(self, token: str) -> str:
         separator = "&" if "?" in self.settings.password_reset_base_url else "?"
         return f"{self.settings.password_reset_base_url}{separator}{urlencode({'token': token})}"

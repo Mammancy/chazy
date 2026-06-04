@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.practice_session import PracticeSession
+from app.models.retention import RetentionState
 from app.models.speaking_challenge import SpeakingChallenge, SpeakingChallengeCompletion
 from app.schemas.speaking_challenge import (
     DailySpeakingChallengesResponse,
@@ -159,7 +162,8 @@ class SpeakingChallengeService:
             .order_by(SpeakingChallengeCompletion.challenge_date.desc())
             .all()
         ]
-        completed_set = set(completed_dates)
+        completed_set = set(completed_dates) | self._practice_session_activity_dates(user_id)
+        completed_set = self._apply_streak_freeze(user_id=user_id, active_today=active_today, completed_set=completed_set)
         current_streak = 0
         cursor = active_today
         if cursor not in completed_set:
@@ -214,6 +218,42 @@ class SpeakingChallengeService:
         else:
             query = query.filter(SpeakingChallengeCompletion.user_id == user_id)
         return query
+
+    def _practice_session_activity_dates(self, user_id: int | None) -> set[date]:
+        if user_id is None:
+            return set()
+
+        rows = self.db.query(PracticeSession).filter(
+            PracticeSession.status == "completed",
+            or_(PracticeSession.requester_user_id == user_id, PracticeSession.partner_user_id == user_id),
+        ).all()
+        activity_dates = set()
+        for row in rows:
+            activity_at = row.updated_at or row.scheduled_at
+            activity_dates.add(activity_at.date())
+        return activity_dates
+
+    def _apply_streak_freeze(self, *, user_id: int | None, active_today: date, completed_set: set[date]) -> set[date]:
+        if user_id is None:
+            return completed_set
+        missed_date = active_today - timedelta(days=1)
+        previous_active_date = active_today - timedelta(days=2)
+        if active_today in completed_set or missed_date in completed_set or previous_active_date not in completed_set:
+            return completed_set
+
+        state = self.db.scalar(select(RetentionState).where(RetentionState.user_id == user_id).limit(1))
+        if state is None:
+            return completed_set
+        if state.last_freeze_used_date == missed_date:
+            return completed_set | {missed_date}
+        if state.freeze_tokens <= 0:
+            return completed_set
+
+        state.freeze_tokens -= 1
+        state.last_freeze_used_date = missed_date
+        self.db.add(state)
+        self.db.commit()
+        return completed_set | {missed_date}
 
     def _challenge_response(
         self,

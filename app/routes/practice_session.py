@@ -11,11 +11,20 @@ from app.schemas.practice_session import (
     PracticeSessionResponse,
     PracticeSessionUpdate,
 )
-from app.schemas.practice_room import PracticeRoomResponse
+from app.schemas.partner_review import PartnerReviewCreate, PartnerReviewResponse
+from app.schemas.practice_room import PracticeRoomMessagesResponse, PracticeRoomResponse
+from app.services.partner_review_service import PartnerReviewService
+from app.services.realtime_practice_service import PracticeRoomManager
 from app.services.practice_room_service import PracticeRoomService
 from app.services.practice_session_service import PracticeSessionService
 
 router = APIRouter(prefix="/practice-sessions", tags=["practice-sessions"])
+
+
+def _practice_value_error(exc: ValueError) -> HTTPException:
+    detail = str(exc)
+    status_code = 404 if "not found" in detail.lower() else 400
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 @router.post("", response_model=PracticeSessionResponse)
@@ -51,7 +60,7 @@ async def create_practice_room(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _practice_value_error(exc) from exc
 
 
 @router.get("/{session_id}/room", response_model=PracticeRoomResponse)
@@ -65,7 +74,40 @@ async def get_practice_room(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _practice_value_error(exc) from exc
+
+
+@router.get("/{session_id}/messages", response_model=PracticeRoomMessagesResponse)
+async def get_practice_room_messages(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PracticeRoomMessagesResponse:
+    try:
+        return PracticeRoomManager(db).list_messages(session_id=session_id, user_id=current_user.id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise _practice_value_error(exc) from exc
+
+
+@router.post("/{session_id}/review", response_model=PartnerReviewResponse)
+async def create_partner_review(
+    session_id: int,
+    payload: PartnerReviewCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PartnerReviewResponse:
+    try:
+        return PartnerReviewService(db).create_review(
+            session_id=session_id,
+            reviewer=current_user,
+            payload=payload,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/{session_id}/room/start", response_model=PracticeRoomResponse)
@@ -79,7 +121,7 @@ async def start_practice_room(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _practice_value_error(exc) from exc
 
 
 @router.post("/{session_id}/room/end", response_model=PracticeRoomResponse)
@@ -93,7 +135,7 @@ async def end_practice_room(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _practice_value_error(exc) from exc
 
 
 @router.get("/{session_id}", response_model=PracticeSessionResponse)
@@ -107,7 +149,7 @@ async def get_practice_session(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _practice_value_error(exc) from exc
 
 
 @router.patch("/{session_id}", response_model=PracticeSessionResponse)

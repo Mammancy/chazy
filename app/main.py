@@ -11,6 +11,8 @@ from app.database.session import close_db, init_db
 from app.middleware.admin_authorization import AdminAuthorizationMiddleware
 from app.routes.admin_dashboard import router as admin_dashboard_router
 from app.routes.openai_diagnostic import router as openai_diagnostic_router
+from app.routes.practice_room_ws import router as practice_room_ws_router
+from app.routes.voice_room_ws import router as voice_room_ws_router
 from app.routes.router import api_router
 from app.services.startup_validation import validate_smtp_startup_configuration
 from app.utils.logging import configure_logging
@@ -54,6 +56,8 @@ def create_application() -> FastAPI:
         name="static",
     )
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+    app.include_router(practice_room_ws_router)
+    app.include_router(voice_room_ws_router)
     app.include_router(admin_dashboard_router)
     app.include_router(openai_diagnostic_router)
     return app

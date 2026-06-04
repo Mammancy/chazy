@@ -29,6 +29,8 @@ class CourseResponse(BaseModel):
     duration: str
     lesson_count: int
     progress: int
+    completed: bool = False
+    completed_at: str | None = None
     thumbnail_tone: str
 
 
@@ -40,3 +42,10 @@ class LessonDetailResponse(CourseResponse):
     quiz: list[QuizQuestionResponse]
     xp_reward: int
     badge: str
+
+
+class LessonCompleteResponse(BaseModel):
+    lesson: LessonDetailResponse
+    xp_awarded: int
+    badge: str
+    already_completed: bool

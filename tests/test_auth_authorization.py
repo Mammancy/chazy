@@ -330,7 +330,7 @@ class AuthorizationBoundaryTests(unittest.TestCase):
             f"/api/v1/placement-assessment/{assessment_id}/result",
             headers=self._auth_header(auth),
         )
-        self.assertEqual(result.status_code, 404)
+        self.assertEqual(result.status_code, 409)
         self.assertEqual(result.json()["detail"], "Placement assessment is not completed yet.")
 
         state = self.client.get(

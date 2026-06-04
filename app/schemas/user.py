@@ -88,6 +88,22 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(..., min_length=20)
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+
+class ActiveSessionResponse(BaseModel):
+    id: int
+    created_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None = None
+
+
+class ActiveSessionListResponse(BaseModel):
+    sessions: list[ActiveSessionResponse]
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str

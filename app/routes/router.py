@@ -12,12 +12,15 @@ from app.routes.health import router as health_router
 from app.routes.learning_analytics import router as learning_analytics_router
 from app.routes.leaderboard import router as leaderboard_router
 from app.routes.lessons import router as lessons_router
+from app.routes.notifications import router as notifications_router
 from app.routes.placement_assessment import router as placement_assessment_router
 from app.routes.practice_session import router as practice_session_router
 from app.routes.practice_topic import router as practice_topic_router
 from app.routes.pronunciation import router as pronunciation_router
 from app.routes.recommendations import router as recommendations_router
+from app.routes.retention import router as retention_router
 from app.routes.speaking_challenge import router as speaking_challenge_router
+from app.routes.speaking_evaluation import router as speaking_evaluation_router
 from app.routes.speaking_partner import router as speaking_partner_router
 from app.routes.vocabulary_notebook import router as vocabulary_notebook_router
 
@@ -31,10 +34,12 @@ api_router.include_router(chat_router)
 api_router.include_router(community_router)
 api_router.include_router(conversation_scenario_router)
 api_router.include_router(placement_assessment_router)
+api_router.include_router(notifications_router)
 api_router.include_router(practice_session_router)
 api_router.include_router(practice_topic_router)
 api_router.include_router(pronunciation_router)
 api_router.include_router(speaking_challenge_router)
+api_router.include_router(speaking_evaluation_router)
 api_router.include_router(speaking_partner_router)
 api_router.include_router(learning_analytics_router)
 api_router.include_router(leaderboard_router)
@@ -42,3 +47,4 @@ api_router.include_router(lessons_router)
 api_router.include_router(fluency_dashboard_router)
 api_router.include_router(recommendations_router)
 api_router.include_router(vocabulary_notebook_router)
+api_router.include_router(retention_router)

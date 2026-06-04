@@ -31,7 +31,9 @@ class PracticeRoomService:
         self.db = db
 
     def create_room(self, *, session_id: int, user_id: int) -> PracticeRoomResponse:
-        self._authorized_session(session_id=session_id, user_id=user_id)
+        session = self._authorized_session(session_id=session_id, user_id=user_id)
+        if session.status != "scheduled":
+            raise ValueError("Practice rooms can only be created for scheduled sessions.")
         room = self._room_for_session(session_id)
         if room is None:
             room = PracticeRoom(session_id=session_id, room_code=self._room_code(), status="scheduled")
@@ -48,10 +50,14 @@ class PracticeRoomService:
         return self._response(room)
 
     def start_room(self, *, session_id: int, user_id: int) -> PracticeRoomResponse:
-        self._authorized_session(session_id=session_id, user_id=user_id)
+        session = self._authorized_session(session_id=session_id, user_id=user_id)
+        if session.status != "scheduled":
+            raise ValueError("Only scheduled practice sessions can be started.")
         room = self._room_for_session(session_id)
         if room is None:
             room = PracticeRoom(session_id=session_id, room_code=self._room_code())
+        if room.status == "ended":
+            raise ValueError("Ended practice rooms cannot be restarted.")
         room.status = "active"
         room.started_at = room.started_at or datetime.now(timezone.utc)
         room.ended_at = None
@@ -65,6 +71,8 @@ class PracticeRoomService:
         room = self._room_for_session(session_id)
         if room is None:
             raise ValueError("Practice room not found.")
+        if room.status != "active":
+            raise ValueError("Only active practice rooms can be ended.")
         room.status = "ended"
         room.ended_at = datetime.now(timezone.utc)
         self.db.add(room)

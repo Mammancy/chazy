@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -60,8 +62,8 @@ class PracticeSessionService:
 
     def update(self, *, session_id: int, user_id: int, payload: PracticeSessionUpdate) -> PracticeSessionResponse:
         session = self._authorized_session(session_id=session_id, user_id=user_id)
-        if session.status == "completed":
-            raise ValueError("Completed practice sessions cannot be rescheduled.")
+        if session.status in {"completed", "cancelled", "missed"}:
+            raise ValueError(f"{session.status.title()} practice sessions cannot be rescheduled.")
         updates = payload.model_dump(exclude_unset=True)
         for field, value in updates.items():
             if value is None:
@@ -82,20 +84,23 @@ class PracticeSessionService:
         payload: PracticeSessionFeedback,
     ) -> PracticeSessionResponse:
         session = self._authorized_session(session_id=session_id, user_id=user.id)
-        if session.status == "cancelled":
-            raise ValueError("Cancelled practice sessions cannot be completed.")
+        if session.status in {"cancelled", "missed"}:
+            raise ValueError(f"{session.status.title()} practice sessions cannot be completed.")
+        already_completed = session.status == "completed"
         session.status = "completed"
+        session.updated_at = datetime.now()
         self._set_feedback(session, user.id, payload.feedback.strip())
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
-        self._award_completion_xp(session)
+        if not already_completed:
+            self._award_completion_xp(session)
         return self._response(session)
 
     def cancel(self, *, session_id: int, user_id: int) -> PracticeSessionResponse:
         session = self._authorized_session(session_id=session_id, user_id=user_id)
-        if session.status == "completed":
-            raise ValueError("Completed practice sessions cannot be cancelled.")
+        if session.status in {"completed", "cancelled"}:
+            raise ValueError(f"{session.status.title()} practice sessions cannot be cancelled.")
         session.status = "cancelled"
         self.db.add(session)
         self.db.commit()

@@ -1,4 +1,10 @@
-from app.schemas.lesson import CourseResponse, LessonDetailResponse
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.lesson_progress import LessonProgress
+from app.schemas.lesson import CourseResponse, LessonCompleteResponse, LessonDetailResponse
 
 
 LESSONS = [
@@ -286,9 +292,13 @@ LESSONS = [
 
 
 class LessonService:
+    def __init__(self, db: Session):
+        self.db = db
+
     def list_courses(
         self,
         *,
+        user_id: int,
         category: str | None = None,
         difficulty: str | None = None,
         search: str | None = None,
@@ -307,6 +317,7 @@ class LessonService:
                 or normalized_search in lesson.description.lower()
             ]
 
+        progress_by_lesson = self._progress_by_lesson(user_id=user_id)
         return [
             CourseResponse(
                 id=lesson.id,
@@ -316,11 +327,78 @@ class LessonService:
                 difficulty=lesson.difficulty,
                 duration=lesson.duration,
                 lesson_count=lesson.lesson_count,
-                progress=lesson.progress,
+                progress=progress_by_lesson.get(lesson.id, lesson.progress).progress
+                if lesson.id in progress_by_lesson
+                else lesson.progress,
+                completed=lesson.id in progress_by_lesson and progress_by_lesson[lesson.id].completed_at is not None,
+                completed_at=self._iso(progress_by_lesson[lesson.id].completed_at)
+                if lesson.id in progress_by_lesson
+                else None,
                 thumbnail_tone=lesson.thumbnail_tone,
             )
             for lesson in lessons
         ]
 
-    def get_lesson(self, lesson_id: str) -> LessonDetailResponse | None:
-        return next((lesson for lesson in LESSONS if lesson.id == lesson_id), None)
+    def get_lesson(self, lesson_id: str, *, user_id: int) -> LessonDetailResponse | None:
+        lesson = next((item for item in LESSONS if item.id == lesson_id), None)
+        if lesson is None:
+            return None
+        progress = self._progress(user_id=user_id, lesson_id=lesson_id)
+        return lesson.model_copy(
+            update={
+                "progress": progress.progress if progress else lesson.progress,
+                "completed": progress.completed_at is not None if progress else False,
+                "completed_at": self._iso(progress.completed_at) if progress else None,
+            },
+        )
+
+    def complete_lesson(self, lesson_id: str, *, user_id: int) -> LessonCompleteResponse | None:
+        lesson = next((item for item in LESSONS if item.id == lesson_id), None)
+        if lesson is None:
+            return None
+
+        progress = self._progress(user_id=user_id, lesson_id=lesson_id)
+        already_completed = progress is not None and progress.completed_at is not None
+        if progress is None:
+            progress = LessonProgress(user_id=user_id, lesson_id=lesson_id)
+            self.db.add(progress)
+
+        if not already_completed:
+            progress.progress = 100
+            progress.xp_awarded = lesson.xp_reward
+            progress.badge = lesson.badge
+            progress.completed_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(progress)
+
+        detail = self.get_lesson(lesson_id, user_id=user_id)
+        return LessonCompleteResponse(
+            lesson=detail,
+            xp_awarded=0 if already_completed else lesson.xp_reward,
+            badge=lesson.badge,
+            already_completed=already_completed,
+        )
+
+    def completed_count(self, *, user_id: int | None) -> int:
+        if user_id is None:
+            return 0
+        return self.db.query(LessonProgress).filter(
+            LessonProgress.user_id == user_id,
+            LessonProgress.completed_at.is_not(None),
+        ).count()
+
+    def _progress(self, *, user_id: int, lesson_id: str) -> LessonProgress | None:
+        return self.db.scalar(
+            select(LessonProgress).where(
+                LessonProgress.user_id == user_id,
+                LessonProgress.lesson_id == lesson_id,
+            ).limit(1),
+        )
+
+    def _progress_by_lesson(self, *, user_id: int) -> dict[str, LessonProgress]:
+        rows = self.db.scalars(select(LessonProgress).where(LessonProgress.user_id == user_id)).all()
+        return {row.lesson_id: row for row in rows}
+
+    @staticmethod
+    def _iso(value) -> str | None:
+        return value.isoformat() if value else None

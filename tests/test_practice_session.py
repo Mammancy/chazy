@@ -82,6 +82,15 @@ class PracticeSessionTests(unittest.TestCase):
         self.assertEqual(completed.json()["status"], "completed")
         self.assertEqual(completed.json()["xp_awarded"], 40)
 
+        streak = self.client.get(
+            "/api/v1/speaking-challenges/streak",
+            params={"session_id": f"chazy-user-{first['user']['id']}"},
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(streak.status_code, 200, streak.text)
+        self.assertGreaterEqual(streak.json()["current_streak"], 1)
+        self.assertTrue(streak.json()["completed_today"])
+
         with self.SessionLocal() as db:
             awards = db.scalars(
                 select(AchievementAward).where(AchievementAward.category == "practice_session")
@@ -178,10 +187,85 @@ class PracticeSessionTests(unittest.TestCase):
         self.assertEqual(ended.json()["status"], "ended")
         self.assertIsNotNone(ended.json()["ended_at"])
 
+        restarted = self.client.post(
+            f"/api/v1/practice-sessions/{session_id}/room/start",
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(restarted.status_code, 400)
+
         topic = self.client.get("/api/v1/practice-topics/random")
         self.assertEqual(topic.status_code, 200, topic.text)
         self.assertIn(topic.json()["category"], {"Public Speaking", "Interviews", "Daily Conversation", "Leadership"})
         self.assertTrue(topic.json()["prompt"])
+
+    def test_notifications_include_active_practice_room(self):
+        first = self._sign_up("notify-first@example.com", "Notify First")
+        second = self._sign_up("notify-second@example.com", "Notify Second")
+        request = self._accepted_request(first, second)
+        created = self.client.post(
+            "/api/v1/practice-sessions",
+            json={
+                "request_id": request["id"],
+                "scheduled_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                "duration_minutes": 30,
+                "topic": "Notification practice",
+            },
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        session_id = created.json()["id"]
+
+        started = self.client.post(
+            f"/api/v1/practice-sessions/{session_id}/room/start",
+            headers=self._auth_header(second),
+        )
+        self.assertEqual(started.status_code, 200, started.text)
+
+        notifications = self.client.get(
+            "/api/v1/notifications",
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(notifications.status_code, 200, notifications.text)
+        body = notifications.json()
+        self.assertGreaterEqual(body["unread_count"], 1)
+        self.assertTrue(
+            any(item["type"] == "practice_room_active" and item["session_id"] == session_id for item in body["notifications"])
+        )
+
+    def test_cancelled_session_cannot_start_room_or_complete(self):
+        first = self._sign_up("room-cancel-first@example.com", "Room Cancel First")
+        second = self._sign_up("room-cancel-second@example.com", "Room Cancel Second")
+        request = self._accepted_request(first, second)
+        created = self.client.post(
+            "/api/v1/practice-sessions",
+            json={
+                "request_id": request["id"],
+                "scheduled_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                "duration_minutes": 30,
+            },
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        session_id = created.json()["id"]
+
+        cancelled = self.client.patch(
+            f"/api/v1/practice-sessions/{session_id}/cancel",
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.text)
+
+        room = self.client.post(
+            f"/api/v1/practice-sessions/{session_id}/room/start",
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(room.status_code, 400)
+
+        completed = self.client.patch(
+            f"/api/v1/practice-sessions/{session_id}/complete",
+            json={"feedback": "Trying to complete a cancelled session."},
+            headers=self._auth_header(first),
+        )
+        self.assertEqual(completed.status_code, 400)
 
     def _accepted_request(self, first: dict, second: dict) -> dict:
         self._public_profile(second)
@@ -213,7 +297,7 @@ class PracticeSessionTests(unittest.TestCase):
             json={
                 "full_name": full_name,
                 "email": email,
-                "phone_number": "08000000000",
+                "phone_number": f"080{abs(hash(email)) % 10000000:07d}",
                 "country": "Nigeria",
                 "state": "Kano",
                 "password": "secret123",

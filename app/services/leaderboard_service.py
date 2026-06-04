@@ -7,6 +7,7 @@ from app.models.speaking_challenge import SpeakingChallengeCompletion
 from app.models.user import User
 from app.models.vocabulary_notebook import VocabularyNotebookEntry
 from app.schemas.leaderboard import LeaderboardResponse, LeaderboardUserResponse
+from app.services.level_service import level_label_for_xp
 from app.services.speaking_challenge_service import SpeakingChallengeService
 
 
@@ -45,7 +46,7 @@ class LeaderboardService:
                     name=user.full_name or user.email or f"Confidence Learner {user.id}",
                     xp=xp,
                     streak=streak,
-                    level=self._level_for_xp(xp),
+                    level=level_label_for_xp(xp),
                     achievement_points=points,
                     speaking_challenges_completed=completed_challenges,
                     vocabulary_words=vocabulary_words,
@@ -107,15 +108,3 @@ class LeaderboardService:
             .group_by(user_column)
         ).all()
         return {int(user_id): int(total or 0) for user_id, total in result if user_id is not None}
-
-    @staticmethod
-    def _level_for_xp(xp: int) -> str:
-        if xp >= 2500:
-            return "Expert Speaker"
-        if xp >= 1200:
-            return "Advanced Speaker"
-        if xp >= 500:
-            return "Confident Speaker"
-        if xp >= 150:
-            return "Growing Speaker"
-        return "New Speaker"

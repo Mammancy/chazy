@@ -19,6 +19,7 @@ from app.schemas.community import (
     PublicAchievement,
     PublicProfile,
 )
+from app.services.level_service import level_label_for_xp
 from app.services.speaking_challenge_service import SpeakingChallengeService
 
 
@@ -121,7 +122,7 @@ class CommunityService:
                 id=user.id,
                 display_name=display_name,
                 initials=self._initials(display_name),
-                level=self._level_for_xp(xp),
+                level=level_label_for_xp(xp),
                 xp=xp,
                 streak=streak,
                 achievement_count=achievement_counts.get(user.id, 0),
@@ -325,18 +326,6 @@ class CommunityService:
             .group_by(user_column)
         ).all()
         return {int(user_id): int(total or 0) for user_id, total in rows if user_id is not None}
-
-    @staticmethod
-    def _level_for_xp(xp: int) -> str:
-        if xp >= 2500:
-            return "Expert Speaker"
-        if xp >= 1200:
-            return "Advanced Speaker"
-        if xp >= 500:
-            return "Confident Speaker"
-        if xp >= 150:
-            return "Growing Speaker"
-        return "New Speaker"
 
     @staticmethod
     def _activity(

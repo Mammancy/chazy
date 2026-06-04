@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
+from app.schemas.partner_review import PartnerReputationResponse, PartnerReviewListResponse
 from app.schemas.speaking_partner import (
     PracticeRequestCreate,
     PracticeRequestListResponse,
@@ -14,6 +15,7 @@ from app.schemas.speaking_partner import (
     SpeakingPartnerProfileResponse,
     SpeakingPartnerProfileUpdate,
 )
+from app.services.partner_review_service import PartnerReviewService
 from app.services.speaking_partner_service import SpeakingPartnerService
 
 router = APIRouter(prefix="/speaking-partners", tags=["speaking-partners"])
@@ -51,6 +53,24 @@ async def recommended_speaking_partners(
     db: Session = Depends(get_db),
 ) -> RecommendedSpeakingPartnerListResponse:
     return SpeakingPartnerService(db).recommended_partners(current_user=current_user)
+
+
+@router.get("/{user_id}/reviews", response_model=PartnerReviewListResponse)
+async def list_partner_reviews(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PartnerReviewListResponse:
+    return PartnerReviewService(db).list_reviews(user_id=user_id)
+
+
+@router.get("/{user_id}/reputation", response_model=PartnerReputationResponse)
+async def get_partner_reputation(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PartnerReputationResponse:
+    return PartnerReviewService(db).reputation(user_id=user_id)
 
 
 @router.get("/me", response_model=SpeakingPartnerProfileResponse)

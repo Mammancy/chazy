@@ -5,8 +5,11 @@ from app.database.session import get_db
 from app.dependencies.auth import get_current_user, require_self
 from app.models.user import User
 from app.schemas.user import (
+    ActiveSessionListResponse,
+    ActiveSessionResponse,
     AuthResponse,
     BasicResponse,
+    ChangePasswordRequest,
     ForgotPasswordRequest,
     ProfileUpdateRequest,
     RefreshTokenRequest,
@@ -57,6 +60,48 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> BasicResponse:
     AuthService(db).reset_password(payload)
     return BasicResponse(success=True, message="Password reset successfully.")
+
+
+@router.post("/change-password", response_model=BasicResponse)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BasicResponse:
+    AuthService(db).change_password(
+        user_id=current_user.id,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
+    return BasicResponse(success=True, message="Password changed. Please sign in again.")
+
+
+@router.get("/sessions", response_model=ActiveSessionListResponse)
+def active_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ActiveSessionListResponse:
+    sessions = RefreshTokenService(db).list_active_for_user(current_user.id)
+    return ActiveSessionListResponse(
+        sessions=[
+            ActiveSessionResponse(
+                id=session.id,
+                created_at=session.created_at,
+                expires_at=session.expires_at,
+                revoked_at=session.revoked_at,
+            )
+            for session in sessions
+        ]
+    )
+
+
+@router.post("/logout-all", response_model=BasicResponse)
+def logout_all_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BasicResponse:
+    RefreshTokenService(db).revoke_all_for_user(current_user.id)
+    return BasicResponse(success=True, message="All sessions have been signed out.")
 
 
 @router.get("/profile/{user_id}", response_model=UserRead)

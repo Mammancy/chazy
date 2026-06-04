@@ -18,6 +18,7 @@ from app.schemas.achievement import (
     AchievementSummaryResponse,
 )
 from app.services.speaking_challenge_service import SpeakingChallengeService
+from app.services.lesson_service import LessonService
 from app.services.vocabulary_notebook_service import VocabularyNotebookService
 
 
@@ -45,6 +46,8 @@ ACHIEVEMENT_CATALOG = [
     AchievementDefinition("scenario_1", "conversation", "Role-Play Starter", "Complete one guided role-play scenario.", "completed_scenarios", 1, 25),
     AchievementDefinition("pronunciation_1", "pronunciation", "Pronunciation Starter", "Complete one pronunciation practice session.", "pronunciation_sessions", 1, 20),
     AchievementDefinition("assessment_complete", "milestone", "Level Check Complete", "Complete an English placement assessment.", "completed_assessments", 1, 30),
+    AchievementDefinition("lesson_1", "lesson", "Lesson Starter", "Complete your first lesson.", "completed_lessons", 1, 20),
+    AchievementDefinition("lesson_5", "lesson", "Lesson Builder", "Complete five lessons.", "completed_lessons", 5, 60),
     AchievementDefinition("partner_practice_1", "practice_session", "Human Practice Starter", "Complete one scheduled partner practice session.", "completed_practice_sessions", 1, 20),
     AchievementDefinition("partner_practice_5", "practice_session", "Conversation Partner", "Complete five scheduled partner practice sessions.", "completed_practice_sessions", 5, 60),
     AchievementDefinition("practice_messages_10", "consistency", "Practice Consistency", "Send 10 learner messages to Chazy.", "practice_messages", 10, 25),
@@ -144,6 +147,7 @@ class AchievementService:
             "completed_scenarios": self._completed_scenarios(session_id=session_id, user_id=user_id),
             "pronunciation_sessions": self._pronunciation_sessions(session_id=session_id, user_id=user_id),
             "completed_assessments": self._completed_assessments(session_id=session_id, user_id=user_id),
+            "completed_lessons": LessonService(self.db).completed_count(user_id=user_id),
             "completed_practice_sessions": self._completed_practice_sessions(user_id=user_id),
             "practice_messages": self._practice_messages(session_id=session_id, user_id=user_id),
         }

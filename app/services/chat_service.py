@@ -38,7 +38,11 @@ logger = logging.getLogger(__name__)
 def _get_openai_service():
     global _OPENAI_SERVICE
     if _OPENAI_SERVICE is None:
-        from app.ai.openai_service import OpenAIService
+        try:
+            from app.ai.openai_service import OpenAIService
+        except ModuleNotFoundError as exc:
+            logger.warning("OpenAI package unavailable; using temporary chat response engine: %s", exc)
+            return None
 
         _OPENAI_SERVICE = OpenAIService()
     return _OPENAI_SERVICE
@@ -196,17 +200,22 @@ class ChatService:
         coaching_context: dict[str, Any],
         request_id: str | None = None,
     ) -> tuple[dict[str, str], str]:
-        result = await _get_openai_service().generate_learning_response(
+        fallback_response = lambda: _TEMP_RESPONSE_ENGINE.generate_learning_response(
+            session_id=session_id,
+            user_message=user_message,
+            grammar_analysis=grammar_analysis,
+            coaching_context=coaching_context,
+        )
+        openai_service = _get_openai_service()
+        if openai_service is None:
+            return fallback_response(), "temporary"
+
+        result = await openai_service.generate_learning_response(
             system_prompt=CHAZY_SYSTEM_PROMPT,
             grammar_analysis=grammar_analysis,
             coaching_context=coaching_context,
             request_id=request_id,
-            fallback_response_factory=lambda: _TEMP_RESPONSE_ENGINE.generate_learning_response(
-                session_id=session_id,
-                user_message=user_message,
-                grammar_analysis=grammar_analysis,
-                coaching_context=coaching_context,
-            ),
+            fallback_response_factory=fallback_response,
         )
         return result.learning_response, result.source
 
