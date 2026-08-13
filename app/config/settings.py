@@ -1,4 +1,4 @@
-﻿import os
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -118,4 +118,22 @@ def validate_production_jwt_secret(settings: Settings | None = None) -> None:
         )
 
 
+def validate_production_database_url(settings: Settings | None = None) -> None:
+    active_settings = settings or get_settings()
+    environment = active_settings.environment.strip().lower()
+    if environment not in {"production", "prod"}:
+        return
 
+    configured_url = os.getenv("DATABASE_URL", "").strip()
+    if not configured_url:
+        raise RuntimeError(
+            "Refusing to start in production because DATABASE_URL is not configured. "
+            "Set DATABASE_URL to the hosted PostgreSQL connection URL."
+        )
+
+    normalized_url = configured_url.lower()
+    if not (normalized_url.startswith("postgresql://") or normalized_url.startswith("postgres://") or normalized_url.startswith("postgresql+")):
+        raise RuntimeError(
+            "Refusing to start in production because DATABASE_URL is not a PostgreSQL URL. "
+            "Set DATABASE_URL to the hosted PostgreSQL connection URL."
+        )
